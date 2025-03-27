@@ -4,14 +4,14 @@ import sys
 from dataclasses import dataclass
 
 class Var(int):
-    __match_args__ = ("index",)
+    __match_args__ = ("as_var",)
 
     def __repr__(self):
-        return f"Var({self.index})"
+        return f"Var({int(self)})"
 
     @property
-    def index(self):
-        return int(self)
+    def as_var(self):
+        return self
 
 code = []
 
@@ -29,7 +29,7 @@ for line in sys.stdin:
         case _:
             raise
 
-code.append(("le0", Var(len(code) - 1)))
+code.append(("le_imm", Var(len(code) - 1), 0.0))
 code.append(("return", Var(len(code)- 1)))
 
 def substitute_vars(inst, f):
@@ -63,7 +63,7 @@ def simplify(out, cse, inst):
     match inst:
         case (("var-x" | "var-y" | "const"), *_):
             return emit(out, cse, inst)
-        case (op, Var(_) as x):
+        case (op, Var(x)):
             match (op, out[x]):
                 case ("ge0", ("neg", x)):
                     return simplify(out, cse, ("le0", x))
@@ -77,30 +77,13 @@ def simplify(out, cse, inst):
                             return emit(out, cse, ("ge0", emit(out, cse, ("sub_imm", z, c * c))))
                         case _:
                             return emit(out, cse, ("ge0", x))
-                case ("le0", ("const", x)):
-                    if x <= 0:
-                        return emit(out, cse, ("true",))
-                    else:
-                        return emit(out, cse, ("false",))
-                case ("le0", ("neg", x)):
-                    return simplify(out, cse, ("ge0", x))
-                case ("le0", ("min", x, y)):
-                    return simplify(out, cse, ("or", simplify(out, cse, ("le0", x)), simplify(out, cse, ("le0", y))))
-                case ("le0", ("max", x, y)):
-                    return simplify(out, cse, ("and", simplify(out, cse, ("le0", x)), simplify(out, cse, ("le0", y))))
-                case ("le0", ("sub_imm", y, c)):
-                    match out[y]:
-                        case ("sqrt", z):
-                            return emit(out, cse, ("le0", emit(out, cse, ("sub_imm", z, c * c))))
-                        case _:
-                            return emit(out, cse, ("le0", x))
                 case ("neg", ("neg", x)):
                     return x
                 case ("square", ("neg", x)):
-                    return simplify(out, cse, ("square", x))
+                    return emit(out, cse, ("square", x))
                 case _:
                     return emit(out, cse, (op, x))
-        case (op, Var(_) as x, Var(_) as y):
+        case (op, Var(x), Var(y)):
             match (op, out[x], out[y]):
                 case ("add", ("const", x), ("const", y)):
                     return emit(out, cse, ("const", x + y))
@@ -113,7 +96,7 @@ def simplify(out, cse, inst):
                 case ("add", _, ("const", y)):
                     return emit(out, cse, ("add_imm", x, y))
                 case ("add", ("neg", x), ("neg", y)):
-                    return emit(out, cse, ("neg", simplify(out, cse, ("add", x, y))))
+                    return emit(out, cse, ("neg", emit(out, cse, ("add", x, y))))
                 case ("add", ("neg", x), _):
                     return emit(out, cse, ("sub", y, x))
                 case ("add", _, ("neg", y)):
@@ -148,6 +131,34 @@ def simplify(out, cse, inst):
                     return emit(out, cse, ("or", y, x))
                 case _:
                     return emit(out, cse, (op, x, y))
+        case (op, Var(x), float(c)):
+            match (op, out[x]):
+                case ("ge_imm", ("const", x)):
+                    return emit(out, cse, (("true",) if x >= c else ("false",)))
+                case ("ge_imm", ("neg", x)):
+                    return simplify(out, cse, ("le_imm", x, - c))
+                case ("ge_imm", ("min", x, y)):
+                    return simplify(out, cse, ("and", simplify(out, cse, ("ge_imm", x, c)), simplify(out, cse, ("ge_imm", y, c))))
+                case ("ge_imm", ("max", x, y)):
+                    return simplify(out, cse, ("or", simplify(out, cse, ("ge_imm", x, c)), simplify(out, cse, ("ge_imm", y, c))))
+                case ("ge_imm", ("sub_imm", x, d)) if out[x][0] == "sqrt":
+                    # sqrt(y) - d >= c <=> y >= square(c + d)
+                    y = out[x][1]
+                    return emit(out, cse, ("ge_imm", y, (c + d) * (c + d)))
+                case ("le_imm", ("const", x)):
+                    return emit(out, cse, (("true",) if x <= c else ("false",)))
+                case ("le_imm", ("neg", x)):
+                    return simplify(out, cse, ("ge_imm", x, - c))
+                case ("le_imm", ("min", x, y)):
+                    return simplify(out, cse, ("or", simplify(out, cse, ("le_imm", x, c)), simplify(out, cse, ("le_imm", y, c))))
+                case ("le_imm", ("max", x, y)):
+                    return simplify(out, cse, ("and", simplify(out, cse, ("le_imm", x, c)), simplify(out, cse, ("le_imm", y, c))))
+                case ("le_imm", ("sub_imm", x, d)) if out[x][0] == "sqrt":
+                    # sqrt(y) - d <= c <=> y <= square(c + d)
+                    y = out[x][1]
+                    return emit(out, cse, ("le_imm", y, (c + d) * (c + d)))
+                case _:
+                    return emit(out, cse, (op, x, c))
         case _:
             raise
 
