@@ -2,6 +2,7 @@
 
 import sys
 from dataclasses import dataclass
+from collections import defaultdict
 
 class Var(int):
     __match_args__ = ("as_var",)
@@ -30,7 +31,7 @@ for line in sys.stdin:
             raise
 
 code.append(("le_imm", Var(len(code) - 1), 0.0))
-code.append(("return", Var(len(code)- 1)))
+code.append(("return", Var(len(code) - 1)))
 
 def square(x):
     return x * x
@@ -49,22 +50,24 @@ def iterate_vars(inst):
         if isinstance(x, Var):
             yield x
 
+def push(x, y):
+    n = len(x)
+    x.append(y)
+    return n
+
 def emit(out, cse, inst):
-    if cse is None:
-        i = Var(len(out))
-        out.append(inst)
-        return i
     if inst in cse:
         return cse[inst]
     else:
-        i = Var(len(out))
-        out.append(inst)
+        i = Var(push(out, inst))
         cse[inst] = i
         return i
 
 def simplify(out, cse, inst):
     match inst:
-        case (("var-x" | "var-y" | "const"), *_):
+        case (("var-x" | "var-y"),):
+            return emit(out, cse, inst)
+        case ("const", float(_)):
             return emit(out, cse, inst)
         case (op, Var(x)):
             match (op, out[x]):
@@ -79,7 +82,7 @@ def simplify(out, cse, inst):
                 case ("add", _, ("const", y)):
                     return emit(out, cse, ("add_imm", x, y))
                 case ("add", ("square", x), ("square", y)):
-                    return emit(out, cse, ("sum_sq", x, y))
+                    return emit(out, cse, ("hypot2", x, y))
                 case ("sub", ("const", x), _):
                     return emit(out, cse, ("neg", emit(out, cse, ("sub_imm", y, x))))
                 case ("sub", _, ("const", y)):
@@ -100,19 +103,20 @@ def simplify(out, cse, inst):
             match (op, out[x]):
                 case ("ge_imm", ("neg", x)):
                     return simplify(out, cse, ("le_imm", x, - c))
-                case ("ge_imm", ("min", x, y)):
-                    return simplify(out, cse, ("and", simplify(out, cse, ("ge_imm", x, c)), simplify(out, cse, ("ge_imm", y, c))))
-                case ("ge_imm", ("max", x, y)):
-                    return simplify(out, cse, ("or", simplify(out, cse, ("ge_imm", x, c)), simplify(out, cse, ("ge_imm", y, c))))
+                case ("ge_imm", ("sqrt", x)):
+                    return simplify(out, cse, ("ge_imm", x, c * c))
                 case ("ge_imm", ("add_imm", x, d)):
-                    return emit(out, cse, ("ge_imm", x, c - d))
+                    return simplify(out, cse, ("ge_imm", x, c - d))
                 case ("ge_imm", ("sub_imm", x, d)):
-                    match out[x]:
-                        case ("sqrt", x):
-                            # sqrt(x) - d >= c <=> x >= square(c + d)
-                            return emit(out, cse, ("ge_imm", x, square(c + d)))
-                        case _:
-                            return emit(out, cse, ("ge_imm", x, c + d))
+                    return simplify(out, cse, ("ge_imm", x, c + d))
+                case ("ge_imm", ("min", x, y)):
+                    x = simplify(out, cse, ("ge_imm", x, c))
+                    y = simplify(out, cse, ("ge_imm", y, c))
+                    return simplify(out, cse, ("and", x, y))
+                case ("ge_imm", ("max", x, y)):
+                    x = simplify(out, cse, ("ge_imm", x, c))
+                    y = simplify(out, cse, ("ge_imm", y, c))
+                    return simplify(out, cse, ("or", x, y))
                 case ("le_imm", ("const", x)):
                     if x <= c:
                         return emit(out, cse, ("true",))
@@ -120,19 +124,20 @@ def simplify(out, cse, inst):
                         return emit(out, cse, ("false",))
                 case ("le_imm", ("neg", x)):
                     return simplify(out, cse, ("ge_imm", x, - c))
-                case ("le_imm", ("min", x, y)):
-                    return simplify(out, cse, ("or", simplify(out, cse, ("le_imm", x, c)), simplify(out, cse, ("le_imm", y, c))))
-                case ("le_imm", ("max", x, y)):
-                    return simplify(out, cse, ("and", simplify(out, cse, ("le_imm", x, c)), simplify(out, cse, ("le_imm", y, c))))
+                case ("le_imm", ("sqrt", x)):
+                    return simplify(out, cse, ("le_imm", x, c * c))
                 case ("le_imm", ("add_imm", x, d)):
-                    return emit(out, cse, ("le_imm", x, c - d))
+                    return simplify(out, cse, ("le_imm", x, c - d))
                 case ("le_imm", ("sub_imm", x, d)):
-                    match out[x]:
-                        case ("sqrt", x):
-                            # sqrt(x) - d <= c <=> x <= square(c + d)
-                            return emit(out, cse, ("le_imm", x, square(c + d)))
-                        case _:
-                            return emit(out, cse, ("le_imm", x, c + d))
+                    return simplify(out, cse, ("le_imm", x, c + d))
+                case ("le_imm", ("min", x, y)):
+                    x = simplify(out, cse, ("le_imm", x, c))
+                    y = simplify(out, cse, ("le_imm", y, c))
+                    return simplify(out, cse, ("or", x, y))
+                case ("le_imm", ("max", x, y)):
+                    x = simplify(out, cse, ("le_imm", x, c))
+                    y = simplify(out, cse, ("le_imm", y, c))
+                    return simplify(out, cse, ("and", x, y))
                 case _:
                     return emit(out, cse, (op, x, c))
         case _:
@@ -167,15 +172,13 @@ def lower(code):
     for i, inst in enumerate(code):
         if used[i]:
             inst = substitute_vars(inst, lambda i: map[i])
-            map.append(emit(out, cse, inst))
+            map.append(Var(push(out, inst)))
         else:
             map.append(None)
 
     return out
 
 code = lower(code)
-
-from collections import defaultdict
 
 counts = defaultdict(lambda: 0)
 
