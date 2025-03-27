@@ -32,6 +32,9 @@ for line in sys.stdin:
 code.append(("le_imm", Var(len(code) - 1), 0.0))
 code.append(("return", Var(len(code)- 1)))
 
+def square(x):
+    return x * x
+
 def substitute_vars(inst, f):
     out = []
     for x in inst:
@@ -75,6 +78,8 @@ def simplify(out, cse, inst):
                     return emit(out, cse, ("add_imm", y, x))
                 case ("add", _, ("const", y)):
                     return emit(out, cse, ("add_imm", x, y))
+                case ("add", ("square", x), ("square", y)):
+                    return emit(out, cse, ("sum_sq", x, y))
                 case ("sub", ("const", x), _):
                     return emit(out, cse, ("neg", emit(out, cse, ("sub_imm", y, x))))
                 case ("sub", _, ("const", y)):
@@ -83,12 +88,12 @@ def simplify(out, cse, inst):
                     return emit(out, cse, ("mul_imm", y, x))
                 case ("mul", _, ("const", y)):
                     return emit(out, cse, ("mul_imm", x, y))
-                case ("and", _, _) if x > y:
-                    return emit(out, cse, ("and", y, x))
+                case ("and", _, _):
+                    return emit(out, cse, ("and", min(x, y), max(x, y)))
                 case ("or", _, ("false",)):
                     return x
-                case ("or", _, _) if x > y:
-                    return emit(out, cse, ("or", y, x))
+                case ("or", _, _):
+                    return emit(out, cse, ("or", min(x, y), max(x, y)))
                 case _:
                     return emit(out, cse, (op, x, y))
         case (op, Var(x), float(c)):
@@ -99,26 +104,35 @@ def simplify(out, cse, inst):
                     return simplify(out, cse, ("and", simplify(out, cse, ("ge_imm", x, c)), simplify(out, cse, ("ge_imm", y, c))))
                 case ("ge_imm", ("max", x, y)):
                     return simplify(out, cse, ("or", simplify(out, cse, ("ge_imm", x, c)), simplify(out, cse, ("ge_imm", y, c))))
-                case ("ge_imm", ("sub_imm", x, d)) if out[x][0] == "sqrt":
-                    # sqrt(y) - d >= c <=> y >= square(c + d)
-                    y = out[x][1]
-                    return simplify(out, cse, ("ge_imm", y, (c + d) * (c + d)))
                 case ("ge_imm", ("add_imm", x, d)):
-                    return simplify(out, cse, ("ge_imm", x, c - d))
+                    return emit(out, cse, ("ge_imm", x, c - d))
+                case ("ge_imm", ("sub_imm", x, d)):
+                    match out[x]:
+                        case ("sqrt", x):
+                            # sqrt(x) - d >= c <=> x >= square(c + d)
+                            return emit(out, cse, ("ge_imm", x, square(c + d)))
+                        case _:
+                            return emit(out, cse, ("ge_imm", x, c + d))
                 case ("le_imm", ("const", x)):
-                    return emit(out, cse, (("true",) if x <= c else ("false",)))
+                    if x <= c:
+                        return emit(out, cse, ("true",))
+                    else:
+                        return emit(out, cse, ("false",))
                 case ("le_imm", ("neg", x)):
                     return simplify(out, cse, ("ge_imm", x, - c))
                 case ("le_imm", ("min", x, y)):
                     return simplify(out, cse, ("or", simplify(out, cse, ("le_imm", x, c)), simplify(out, cse, ("le_imm", y, c))))
                 case ("le_imm", ("max", x, y)):
                     return simplify(out, cse, ("and", simplify(out, cse, ("le_imm", x, c)), simplify(out, cse, ("le_imm", y, c))))
-                case ("le_imm", ("sub_imm", x, d)) if out[x][0] == "sqrt":
-                    # sqrt(y) - d <= c <=> y <= square(c + d)
-                    y = out[x][1]
-                    return simplify(out, cse, ("le_imm", y, (c + d) * (c + d)))
                 case ("le_imm", ("add_imm", x, d)):
-                    return simplify(out, cse, ("le_imm", x, c - d))
+                    return emit(out, cse, ("le_imm", x, c - d))
+                case ("le_imm", ("sub_imm", x, d)):
+                    match out[x]:
+                        case ("sqrt", x):
+                            # sqrt(x) - d <= c <=> x <= square(c + d)
+                            return emit(out, cse, ("le_imm", x, square(c + d)))
+                        case _:
+                            return emit(out, cse, ("le_imm", x, c + d))
                 case _:
                     return emit(out, cse, (op, x, c))
         case _:
@@ -171,3 +185,9 @@ for i, x in enumerate(code):
 
 for x, y in counts.items():
     print(x, y)
+
+'''
+for i, inst in enumerate(code):
+    if inst[0] == "le_imm":
+        print("le_imm", code[inst[1]], inst[2])
+        '''
