@@ -179,15 +179,10 @@ from collections import defaultdict
 
 counts = defaultdict(lambda: 0)
 
-for i, x in enumerate(code):
-    counts[x[0]] += 1
-    print(Var(i), "=", x)
+for i, inst in enumerate(code):
+    counts[inst[0]] += 1
+    # inst = substitute_vars(inst, lambda i: code[i])
+    print(Var(i), "=", inst)
 
 for x, y in counts.items():
     print(x, y)
-
-'''
-for i, inst in enumerate(code):
-    if inst[0] == "le_imm":
-        print("le_imm", code[inst[1]], inst[2])
-        '''
