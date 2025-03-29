@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
 import sys
-from dataclasses import dataclass
-from collections import defaultdict
 
 class Var(int):
     __match_args__ = ("as_var",)
@@ -42,11 +40,6 @@ def substitute_vars(inst, f):
             out.append(x)
     return tuple(out)
 
-def iterate_vars(inst):
-    for x in inst:
-        if isinstance(x, Var):
-            yield x
-
 def push(x, y):
     n = len(x)
     x.append(y)
@@ -55,10 +48,9 @@ def push(x, y):
 def emit(out, cse, inst):
     if inst in cse:
         return cse[inst]
-    else:
-        i = Var(push(out, inst))
-        cse[inst] = i
-        return i
+    i = Var(push(out, inst))
+    cse[inst] = i
+    return i
 
 def simplify(out, cse, inst):
     match inst:
@@ -68,6 +60,8 @@ def simplify(out, cse, inst):
             return emit(out, cse, inst)
         case op, Var(x):
             match (op, out[x]):
+                case "sqrt", ("hypot2", x, y):
+                    return emit(out, cse, ("hypot", x, y))
                 case "square", ("neg", x):
                     return emit(out, cse, ("square", x))
                 case _:
@@ -76,12 +70,8 @@ def simplify(out, cse, inst):
             match (op, out[x]):
                 case "ge_imm", ("neg", x):
                     return simplify(out, cse, ("le_imm", x, - c))
-                case "ge_imm", ("sqrt", x):
-                    return simplify(out, cse, ("ge_imm", x, c * c))
                 case "ge_imm", ("add_imm", x, d):
                     return simplify(out, cse, ("ge_imm", x, c - d))
-                case "ge_imm", ("sub_imm", x, d):
-                    return simplify(out, cse, ("ge_imm", x, c + d))
                 case "ge_imm", ("min", x, y):
                     x = simplify(out, cse, ("ge_imm", x, c))
                     y = simplify(out, cse, ("ge_imm", y, c))
@@ -91,18 +81,11 @@ def simplify(out, cse, inst):
                     y = simplify(out, cse, ("ge_imm", y, c))
                     return simplify(out, cse, ("or", x, y))
                 case "le_imm", ("const", x):
-                    if x <= c:
-                        return emit(out, cse, ("true",))
-                    else:
-                        return emit(out, cse, ("false",))
+                    return emit(out, cse, (("true",) if x <= c else ("false",)))
                 case "le_imm", ("neg", x):
                     return simplify(out, cse, ("ge_imm", x, - c))
-                case "le_imm", ("sqrt", x):
-                    return simplify(out, cse, ("le_imm", x, c * c))
                 case "le_imm", ("add_imm", x, d):
                     return simplify(out, cse, ("le_imm", x, c - d))
-                case "le_imm", ("sub_imm", x, d):
-                    return simplify(out, cse, ("le_imm", x, c + d))
                 case "le_imm", ("min", x, y):
                     x = simplify(out, cse, ("le_imm", x, c))
                     y = simplify(out, cse, ("le_imm", y, c))
@@ -115,16 +98,24 @@ def simplify(out, cse, inst):
                     return emit(out, cse, (op, x, c))
         case op, Var(x), Var(y):
             match (op, out[x], out[y]):
+                case "add", ("square", x), ("square", y):
+                    return emit(out, cse, ("hypot2", x, y))
                 case "add", ("const", x), _:
                     return emit(out, cse, ("add_imm", y, x))
                 case "add", _, ("const", y):
                     return emit(out, cse, ("add_imm", x, y))
-                case "add", ("square", x), ("square", y):
-                    return emit(out, cse, ("hypot2", x, y))
+                case "add", ("add_imm", x, c), _:
+                    return emit(out, cse, ("add_imm", emit(out, cse, ("add", x, y)), c))
+                case "add", _, ("add_imm", y, c):
+                    return emit(out, cse, ("add_imm", emit(out, cse, ("add", x, y)), c))
                 case "sub", ("const", x), _:
-                    return emit(out, cse, ("neg", emit(out, cse, ("sub_imm", y, x))))
+                    return emit(out, cse, ("neg", emit(out, cse, ("add_imm", y, - x))))
                 case "sub", _, ("const", y):
-                    return emit(out, cse, ("sub_imm", x, y))
+                    return emit(out, cse, ("add_imm", x, - y))
+                case "sub", ("add_imm", x, c), _:
+                    return emit(out, cse, ("add_imm", emit(out, cse, ("sub", x, y)), c))
+                case "sub", _, ("add_imm", y, c):
+                    return emit(out, cse, ("add_imm", emit(out, cse, ("sub", x, y)), - c))
                 case "mul", ("const", x), _:
                     return emit(out, cse, ("mul_imm", y, x))
                 case "mul", _, ("const", y):
@@ -159,11 +150,11 @@ def lower(code):
 
     for i, inst in reversed(list(enumerate(code))):
         if used[i]:
-            for var in iterate_vars(inst):
-                used[var] = True
+            for x in inst:
+                if isinstance(x, Var):
+                    used[x] = True
 
     out = []
-    cse = None
     map = [] # old var -> new var
 
     for i, inst in enumerate(code):
@@ -177,11 +168,13 @@ def lower(code):
 
 code = lower(code)
 
+from collections import defaultdict
+
 counts = defaultdict(lambda: 0)
 
 for i, inst in enumerate(code):
     counts[inst[0]] += 1
-    # inst = substitute_vars(inst, lambda i: code[i])
+    inst = substitute_vars(inst, lambda i: code[i])
     print(Var(i), "=", inst)
 
 for x, y in counts.items():
