@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
+import numpy
 
 from math import copysign
 
@@ -30,8 +31,8 @@ for line in sys.stdin:
         case _:
             raise
 
-code.append(("le", Var(len(code) - 1), 0.0))
-code.append(("ret", Var(len(code) - 1)))
+code.append(("le_imm", Var(len(code) - 1), 0.0))
+code.append(("result", Var(len(code) - 1)))
 
 def substitute_vars(ins, f):
     out = []
@@ -75,47 +76,47 @@ def simplify(out, cse, ins):
                     return emit(out, cse, (op, x))
         case op, Var(x), float(c):
             match (op, out[x]):
-                case "ge", ("affine", a, b, d):
+                case "ge_imm", ("affine", a, b, d):
                     if a + b < 0:
-                        return emit(out, cse, ("le", emit(out, cse, ("affine", - a + 0.0, - b + 0.0, 0.0)), - (c - d) + 0.0))
+                        return emit(out, cse, ("le_imm", emit(out, cse, ("affine", - a + 0.0, - b + 0.0, 0.0)), - (c - d) + 0.0))
                     else:
-                        return emit(out, cse, ("ge", emit(out, cse, ("affine", a + 0.0, b + 0.0, 0.0)), (c - d) + 0.0))
-                case "ge", ("sqrt", x):
+                        return emit(out, cse, ("ge_imm", emit(out, cse, ("affine", a + 0.0, b + 0.0, 0.0)), (c - d) + 0.0))
+                case "ge_imm", ("sqrt", x):
                     if c <= 0.0:
                         return emit(out, cse, ("true",))
-                    return emit(out, cse, ("ge", x, c * c))
-                case "ge", ("add_imm", x, d):
-                    return simplify(out, cse, ("ge", x, c - d))
-                case "ge", ("min", x, y):
-                    x = simplify(out, cse, ("ge", x, c))
-                    y = simplify(out, cse, ("ge", y, c))
+                    return emit(out, cse, ("ge_imm", x, c * c))
+                case "ge_imm", ("add_imm", x, d):
+                    return simplify(out, cse, ("ge_imm", x, c - d))
+                case "ge_imm", ("min", x, y):
+                    x = simplify(out, cse, ("ge_imm", x, c))
+                    y = simplify(out, cse, ("ge_imm", y, c))
                     return simplify(out, cse, ("and", x, y))
-                case "ge", ("max", x, y):
-                    x = simplify(out, cse, ("ge", x, c))
-                    y = simplify(out, cse, ("ge", y, c))
+                case "ge_imm", ("max", x, y):
+                    x = simplify(out, cse, ("ge_imm", x, c))
+                    y = simplify(out, cse, ("ge_imm", y, c))
                     return simplify(out, cse, ("or", x, y))
-                case "le", ("affine", a, b, d):
+                case "le_imm", ("affine", a, b, d):
                     if a + b < 0:
-                        return emit(out, cse, ("ge", emit(out, cse, ("affine", - a + 0.0, - b + 0.0, 0.0)), - (c - d) + 0.0))
+                        return emit(out, cse, ("ge_imm", emit(out, cse, ("affine", - a + 0.0, - b + 0.0, 0.0)), - (c - d) + 0.0))
                     else:
-                        return emit(out, cse, ("le", emit(out, cse, ("affine", a + 0.0, b + 0.0, 0.0)), (c - d) + 0.0))
-                case "le", ("sqrt", x):
+                        return emit(out, cse, ("le_imm", emit(out, cse, ("affine", a + 0.0, b + 0.0, 0.0)), (c - d) + 0.0))
+                case "le_imm", ("sqrt", x):
                     if c < 0.0:
                         return emit(out, cse, ("false",))
-                    return emit(out, cse, ("le", x, c * c))
-                case "le", ("const", x):
+                    return emit(out, cse, ("le_imm", x, c * c))
+                case "le_imm", ("const", x):
                     return emit(out, cse, (("true",) if x <= c else ("false",)))
-                case "le", ("neg", x):
-                    return simplify(out, cse, ("ge", x, - c))
-                case "le", ("add_imm", x, d):
-                    return simplify(out, cse, ("le", x, c - d))
-                case "le", ("min", x, y):
-                    x = simplify(out, cse, ("le", x, c))
-                    y = simplify(out, cse, ("le", y, c))
+                case "le_imm", ("neg", x):
+                    return simplify(out, cse, ("ge_imm", x, - c))
+                case "le_imm", ("add_imm", x, d):
+                    return simplify(out, cse, ("le_imm", x, c - d))
+                case "le_imm", ("min", x, y):
+                    x = simplify(out, cse, ("le_imm", x, c))
+                    y = simplify(out, cse, ("le_imm", y, c))
                     return simplify(out, cse, ("or", x, y))
-                case "le", ("max", x, y):
-                    x = simplify(out, cse, ("le", x, c))
-                    y = simplify(out, cse, ("le", y, c))
+                case "le_imm", ("max", x, y):
+                    x = simplify(out, cse, ("le_imm", x, c))
+                    y = simplify(out, cse, ("le_imm", y, c))
                     return simplify(out, cse, ("and", x, y))
                 case _:
                     return emit(out, cse, (op, x, c))
@@ -191,14 +192,24 @@ def lower(code):
 
 code = lower(code)
 
-from collections import defaultdict
+print(f"static Ins PROSPERO[{len(code) + 1}] = {{")
+for ins in code:
+    match ins:
+        case "affine", a, b, c:
+            print(f"  {{ AFFINE, .affine = {{ {a:.9}f, {b:.9}f, {c:.9}f }} }},")
+        case "hypot2", x, y:
+            print(f"  {{ HYPOT2, .hypot2 = {{ {int(x)}, {int(y)} }} }},")
+        case "le_imm", x, t:
+            print(f"  {{ LE_IMM, .le_imm = {{ {int(x)}, {t:.9}f }} }},")
+        case "ge_imm", x, t:
+            print(f"  {{ GE_IMM, .ge_imm = {{ {int(x)}, {t:.9}f }} }},")
+        case "and", x, y:
+            print(f"  {{ AND, .and = {{ {int(x)}, {int(y)} }} }},")
+        case "or", x, y:
+            print(f"  {{ OR, .or = {{ {int(x)}, {int(y)} }} }},")
+        case "result", x:
+            print(f"  {{ RESULT, .result = {{ {int(x)} }} }}")
+        case _:
+            raise
 
-counts = defaultdict(lambda: 0)
-
-for i, ins in enumerate(code):
-    counts[ins[0]] += 1
-    ins = substitute_vars(ins, lambda i: code[i])
-    print(Var(i), "=", ins)
-
-for x, y in counts.items():
-    print(x, y)
+print(f"}};")

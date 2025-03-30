@@ -7,11 +7,11 @@
 
 struct Tbl;
 
-typedef void (*Op)(struct Env *, Ins *, uint8_t out[16], struct Tbl *, size_t, Ins);
+typedef void (*Op)(Env *, Ins *, uint8_t out[16], struct Tbl *, size_t, Ins);
 
 struct Tbl { Op ops[7]; };
 
-static inline void DISPATCH(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip) {
+static inline void DISPATCH(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip) {
   Ins ins = code[ip];
   tbl->ops[ins.tag](env, code, out, tbl, ip, ins);
 }
@@ -74,7 +74,7 @@ static inline float32x4_t vbitor(float32x4_t x, float32x4_t y) {
   return vreinterpretq_f32_u32(vorrq_u32(vreinterpretq_u32_f32(x), vreinterpretq_u32_f32(y)));
 }
 
-static void op_affine(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static void op_affine(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4x4_t a = vdup(ins.affine.a);
   float32x4x4_t b = vdup(ins.affine.b);
   float32x4x4_t c = vdup(ins.affine.c);
@@ -84,60 +84,60 @@ static void op_affine(struct Env * env, Ins * code, uint8_t out[16], struct Tbl 
   DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_hypot2(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static void op_hypot2(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4x4_t x = vld1q_f32_x4(env->v[ins.hypot2.x]);
   float32x4x4_t y = vld1q_f32_x4(env->v[ins.hypot2.y]);
   vst1q_f32_x4(env->v[ip], vadd(vmul(x, x), vmul(y, y)));
   DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_le(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
-  float32x4x4_t x = vld1q_f32_x4(env->v[ins.le.x]);
-  float32x4x4_t t = vdup(ins.le.t);
+static void op_le_imm(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+  float32x4x4_t x = vld1q_f32_x4(env->v[ins.le_imm.x]);
+  float32x4x4_t t = vdup(ins.le_imm.t);
   vst1q_f32(env->v[ip], vle(x, t));
   DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_ge(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
-  float32x4x4_t x = vld1q_f32_x4(env->v[ins.ge.x]);
-  float32x4x4_t t = vdup(ins.ge.t);
+static void op_ge_imm(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+  float32x4x4_t x = vld1q_f32_x4(env->v[ins.ge_imm.x]);
+  float32x4x4_t t = vdup(ins.ge_imm.t);
   vst1q_f32(env->v[ip], vge(x, t));
   DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_and(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static void op_and(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4_t x = vld1q_f32(env->v[ins.and.x]);
   float32x4_t y = vld1q_f32(env->v[ins.and.y]);
   vst1q_f32(env->v[ip], vbitand(x, y));
   DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_or(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static void op_or(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4_t x = vld1q_f32(env->v[ins.or.x]);
   float32x4_t y = vld1q_f32(env->v[ins.or.y]);
   vst1q_f32(env->v[ip], vbitor(x, y));
   DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_ret(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static void op_result(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
   (void) code;
   (void) tbl;
   (void) ip;
-  vst1q_u8(out, vreinterpretq_u8_f32(vld1q_f32(env->v[ins.ret.x])));
+  vst1q_u8(out, vreinterpretq_u8_f32(vld1q_f32(env->v[ins.result.x])));
 }
 
 static struct Tbl TBL = {
   .ops = {
     op_affine,
     op_hypot2,
-    op_le,
-    op_ge,
+    op_le_imm,
+    op_ge_imm,
     op_and,
     op_or,
-    op_ret
+    op_result
   }
 };
 
-void eval(struct Env * env, Ins * code, uint8_t out[16]) {
+void eval(Env * env, Ins * code, uint8_t out[16]) {
   DISPATCH(env, code, out, &TBL, 0);
 }

@@ -1,6 +1,6 @@
-.PHONY: clean default
+.PHONY: default
 
-default: out/go
+default: go
 
 CFLAGS = \
 	-std=c2x \
@@ -16,11 +16,11 @@ CFLAGS = \
 	-fno-slp-vectorize \
 	-pedantic
 
-clean:
-	rm -f out/*
+prospero.c: compile.py prospero.vm
+	./compile.py < prospero.vm > prospero.c
 
-out/go: main.c eval.h out/eval.o
-	clang -o $@ $< out/eval.o $(CFLAGS)
+go: main.c eval.h eval.o
+	clang -o $@ $< eval.o $(CFLAGS)
 
-out/eval.o: eval.c eval.h
+eval.o: eval.c eval.h prospero.c
 	clang -c -o $@ $< $(CFLAGS)

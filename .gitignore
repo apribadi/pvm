@@ -1,4 +1,5 @@
+*.o
 *.swp
 go
-out
+prospero.c
 prospero.vm
