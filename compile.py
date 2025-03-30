@@ -2,6 +2,8 @@
 
 import sys
 
+from math import copysign
+
 class Var(int):
     __match_args__ = ("as_var",)
 
@@ -28,8 +30,8 @@ for line in sys.stdin:
         case _:
             raise
 
-code.append(("le_imm", Var(len(code) - 1), 0.0))
-code.append(("return", Var(len(code) - 1)))
+code.append(("le", Var(len(code) - 1), 0.0))
+code.append(("ret", Var(len(code) - 1)))
 
 def substitute_vars(inst, f):
     out = []
@@ -54,72 +56,93 @@ def emit(out, cse, inst):
 
 def simplify(out, cse, inst):
     match inst:
-        case "var-x" | "var-y",:
-            return emit(out, cse, inst)
+        case "var-x",:
+            return emit(out, cse, ("affine", 1.0, 0.0, 0.0))
+        case "var-y",:
+            return emit(out, cse, ("affine", 0.0, 1.0, 0.0))
         case "const", float(_):
             return emit(out, cse, inst)
         case op, Var(x):
             match (op, out[x]):
-                case "sqrt", ("hypot2", x, y):
-                    return emit(out, cse, ("hypot", x, y))
-                case "square", ("neg", x):
-                    return emit(out, cse, ("square", x))
+                case "neg", ("affine", a, b, c):
+                    return emit(out, cse, ("affine", - a, - b, - c))
+                case "square", ("affine", a, b, c):
+                    if a + b < 0:
+                        return emit(out, cse, ("square", emit(out, cse, ("affine", - a + 0.0, - b + 0.0, - c + 0.0))))
+                    else:
+                        return emit(out, cse, ("square", emit(out, cse, ("affine", a + 0.0, b + 0.0, c + 0.0))))
                 case _:
                     return emit(out, cse, (op, x))
         case op, Var(x), float(c):
             match (op, out[x]):
-                case "ge_imm", ("neg", x):
-                    return simplify(out, cse, ("le_imm", x, - c))
-                case "ge_imm", ("add_imm", x, d):
-                    return simplify(out, cse, ("ge_imm", x, c - d))
-                case "ge_imm", ("min", x, y):
-                    x = simplify(out, cse, ("ge_imm", x, c))
-                    y = simplify(out, cse, ("ge_imm", y, c))
+                case "ge", ("affine", a, b, d):
+                    if a + b < 0:
+                        return emit(out, cse, ("le", emit(out, cse, ("affine", - a + 0.0, - b + 0.0, 0.0)), - (c - d) + 0.0))
+                    else:
+                        return emit(out, cse, ("ge", emit(out, cse, ("affine", a + 0.0, b + 0.0, 0.0)), (c - d) + 0.0))
+                case "ge", ("sqrt", x):
+                    if c <= 0.0:
+                        return emit(out, cse, ("true",))
+                    return emit(out, cse, ("ge", x, c * c))
+                case "ge", ("add_imm", x, d):
+                    return simplify(out, cse, ("ge", x, c - d))
+                case "ge", ("min", x, y):
+                    x = simplify(out, cse, ("ge", x, c))
+                    y = simplify(out, cse, ("ge", y, c))
                     return simplify(out, cse, ("and", x, y))
-                case "ge_imm", ("max", x, y):
-                    x = simplify(out, cse, ("ge_imm", x, c))
-                    y = simplify(out, cse, ("ge_imm", y, c))
+                case "ge", ("max", x, y):
+                    x = simplify(out, cse, ("ge", x, c))
+                    y = simplify(out, cse, ("ge", y, c))
                     return simplify(out, cse, ("or", x, y))
-                case "le_imm", ("const", x):
+                case "le", ("affine", a, b, d):
+                    if a + b < 0:
+                        return emit(out, cse, ("ge", emit(out, cse, ("affine", - a + 0.0, - b + 0.0, 0.0)), - (c - d) + 0.0))
+                    else:
+                        return emit(out, cse, ("le", emit(out, cse, ("affine", a + 0.0, b + 0.0, 0.0)), (c - d) + 0.0))
+                case "le", ("sqrt", x):
+                    if c < 0.0:
+                        return emit(out, cse, ("false",))
+                    return emit(out, cse, ("le", x, c * c))
+                case "le", ("const", x):
                     return emit(out, cse, (("true",) if x <= c else ("false",)))
-                case "le_imm", ("neg", x):
-                    return simplify(out, cse, ("ge_imm", x, - c))
-                case "le_imm", ("add_imm", x, d):
-                    return simplify(out, cse, ("le_imm", x, c - d))
-                case "le_imm", ("min", x, y):
-                    x = simplify(out, cse, ("le_imm", x, c))
-                    y = simplify(out, cse, ("le_imm", y, c))
+                case "le", ("neg", x):
+                    return simplify(out, cse, ("ge", x, - c))
+                case "le", ("add_imm", x, d):
+                    return simplify(out, cse, ("le", x, c - d))
+                case "le", ("min", x, y):
+                    x = simplify(out, cse, ("le", x, c))
+                    y = simplify(out, cse, ("le", y, c))
                     return simplify(out, cse, ("or", x, y))
-                case "le_imm", ("max", x, y):
-                    x = simplify(out, cse, ("le_imm", x, c))
-                    y = simplify(out, cse, ("le_imm", y, c))
+                case "le", ("max", x, y):
+                    x = simplify(out, cse, ("le", x, c))
+                    y = simplify(out, cse, ("le", y, c))
                     return simplify(out, cse, ("and", x, y))
                 case _:
                     return emit(out, cse, (op, x, c))
         case op, Var(x), Var(y):
             match (op, out[x], out[y]):
+                case "add", ("affine", a, b, c), ("affine", d, e, f):
+                    return emit(out, cse, ("affine", a + d, b + e, c + f))
+                case "add", ("affine", a, b, c), ("const", d):
+                    return emit(out, cse, ("affine", a, b, c + d))
+                case "add", ("const", d), ("affine", a, b, c):
+                    return emit(out, cse, ("affine", a, b, c + d))
                 case "add", ("square", x), ("square", y):
                     return emit(out, cse, ("hypot2", x, y))
-                case "add", ("const", x), _:
-                    return emit(out, cse, ("add_imm", y, x))
-                case "add", _, ("const", y):
-                    return emit(out, cse, ("add_imm", x, y))
-                case "add", ("add_imm", x, c), _:
-                    return emit(out, cse, ("add_imm", emit(out, cse, ("add", x, y)), c))
-                case "add", _, ("add_imm", y, c):
-                    return emit(out, cse, ("add_imm", emit(out, cse, ("add", x, y)), c))
+                case "sub", ("affine", a, b, c), ("affine", d, e, f):
+                    return emit(out, cse, ("affine", a - d, b - e, c - f))
+                case "sub", ("affine", a, b, c), ("const", d):
+                    return emit(out, cse, ("affine", a, b, c - d))
+                case "sub", ("const", d), ("affine", a, b, c):
+                    return emit(out, cse, ("affine", - a, - b, - c + d))
                 case "sub", ("const", x), _:
                     return emit(out, cse, ("neg", emit(out, cse, ("add_imm", y, - x))))
                 case "sub", _, ("const", y):
                     return emit(out, cse, ("add_imm", x, - y))
-                case "sub", ("add_imm", x, c), _:
-                    return emit(out, cse, ("add_imm", emit(out, cse, ("sub", x, y)), c))
-                case "sub", _, ("add_imm", y, c):
-                    return emit(out, cse, ("add_imm", emit(out, cse, ("sub", x, y)), - c))
-                case "mul", ("const", x), _:
-                    return emit(out, cse, ("mul_imm", y, x))
-                case "mul", _, ("const", y):
-                    return emit(out, cse, ("mul_imm", x, y))
+                case "mul", ("affine", a, b, c), ("const", d):
+                    return emit(out, cse, ("affine", a * d, b * d, c * d))
+                case "mul", ("const", d), ("affine", a, b, c):
+                    return emit(out, cse, ("affine", a * d, b * d, c * d))
                 case "and", _, _:
                     return emit(out, cse, ("and", min(x, y), max(x, y)))
                 case "or", _, ("false",):

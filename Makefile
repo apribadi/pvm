@@ -1,5 +1,26 @@
-go: main.c eval.o
-	clang -o go main.c eval.o -O2 -Wall -Werror -pedantic -march=native
+.PHONY: clean default
 
-eval.o: eval.c
-	clang -o eval.o -c eval.c -O2 -Wall -Werror -pedantic -march=native
+default: out/go
+
+CFLAGS = \
+	-std=c2x \
+	-O2 \
+	-march=native \
+	-Wall \
+	-Wconversion \
+	-Wdouble-promotion \
+	-Wextra \
+	-ffp-contract=off \
+	-fno-math-errno \
+	-fno-omit-frame-pointer \
+	-fno-slp-vectorize \
+	-pedantic
+
+clean:
+	rm -f out/*
+
+out/go: main.c eval.h out/eval.o
+	clang -o $@ $< out/eval.o $(CFLAGS)
+
+out/eval.o: eval.c eval.h
+	clang -c -o $@ $< $(CFLAGS)
