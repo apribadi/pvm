@@ -7,13 +7,13 @@
 
 struct Tbl;
 
-typedef void (*Op)(struct Env *, Inst *, struct Tbl *, size_t, Inst);
+typedef void (*Op)(struct Env *, Ins *, uint8_t out[16], struct Tbl *, size_t, Ins);
 
 struct Tbl { Op ops[7]; };
 
-static inline void DISPATCH(struct Env * env, Inst * code, struct Tbl * tbl, size_t ip) {
-  Inst inst = code[ip];
-  tbl->ops[inst.tag](env, code, tbl, ip, inst);
+static inline void DISPATCH(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip) {
+  Ins ins = code[ip];
+  tbl->ops[ins.tag](env, code, out, tbl, ip, ins);
 }
 
 static inline float32x4x4_t vmul(float32x4x4_t x, float32x4x4_t y) {
@@ -44,92 +44,86 @@ static inline float32x4x4_t vdup(float x) {
   return z;
 }
 
-static inline float32x4x4_t vle(float32x4x4_t x, float32x4x4_t y) {
-  float32x4x4_t z;
-  z.val[0] = vcleq_f32(x.val[0], y.val[0]);
-  z.val[1] = vcleq_f32(x.val[1], y.val[1]);
-  z.val[2] = vcleq_f32(x.val[2], y.val[2]);
-  z.val[3] = vcleq_f32(x.val[3], y.val[3]);
-  return z;
+static inline float32x4_t vle(float32x4x4_t x, float32x4x4_t y) {
+  float32x4_t a = vcleq_f32(x.val[0], y.val[0]);
+  float32x4_t b = vcleq_f32(x.val[1], y.val[1]);
+  float32x4_t c = vcleq_f32(x.val[2], y.val[2]);
+  float32x4_t d = vcleq_f32(x.val[3], y.val[3]);
+  uint16x8_t e = vuzp1q_u16(vreinterpretq_u16_f32(a), vreinterpretq_u16_f32(b));
+  uint16x8_t f = vuzp1q_u16(vreinterpretq_u16_f32(c), vreinterpretq_u16_f32(d));
+  uint8x16_t g = vuzp1q_u8(vreinterpretq_u8_u16(e), vreinterpretq_u8_u16(f));
+  return vreinterpretq_f32_u8(g);
 }
 
-static inline float32x4x4_t vge(float32x4x4_t x, float32x4x4_t y) {
-  float32x4x4_t z;
-  z.val[0] = vcgeq_f32(x.val[0], y.val[0]);
-  z.val[1] = vcgeq_f32(x.val[1], y.val[1]);
-  z.val[2] = vcgeq_f32(x.val[2], y.val[2]);
-  z.val[3] = vcgeq_f32(x.val[3], y.val[3]);
-  return z;
+static inline float32x4_t vge(float32x4x4_t x, float32x4x4_t y) {
+  float32x4_t a = vcgeq_f32(x.val[0], y.val[0]);
+  float32x4_t b = vcgeq_f32(x.val[1], y.val[1]);
+  float32x4_t c = vcgeq_f32(x.val[2], y.val[2]);
+  float32x4_t d = vcgeq_f32(x.val[3], y.val[3]);
+  uint16x8_t e = vuzp1q_u16(vreinterpretq_u16_f32(a), vreinterpretq_u16_f32(b));
+  uint16x8_t f = vuzp1q_u16(vreinterpretq_u16_f32(c), vreinterpretq_u16_f32(d));
+  uint8x16_t g = vuzp1q_u8(vreinterpretq_u8_u16(e), vreinterpretq_u8_u16(f));
+  return vreinterpretq_f32_u8(g);
 }
 
-static inline float32x4x4_t vbitand(float32x4x4_t x, float32x4x4_t y) {
-  float32x4x4_t z;
-  z.val[0] = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(x.val[0]), vreinterpretq_u32_f32(y.val[0])));
-  z.val[1] = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(x.val[1]), vreinterpretq_u32_f32(y.val[1])));
-  z.val[2] = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(x.val[2]), vreinterpretq_u32_f32(y.val[2])));
-  z.val[3] = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(x.val[3]), vreinterpretq_u32_f32(y.val[3])));
-  return z;
+static inline float32x4_t vbitand(float32x4_t x, float32x4_t y) {
+  return vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(x), vreinterpretq_u32_f32(y)));
 }
 
-static inline float32x4x4_t vbitor(float32x4x4_t x, float32x4x4_t y) {
-  float32x4x4_t z;
-  z.val[0] = vreinterpretq_f32_u32(vorrq_u32(vreinterpretq_u32_f32(x.val[0]), vreinterpretq_u32_f32(y.val[0])));
-  z.val[1] = vreinterpretq_f32_u32(vorrq_u32(vreinterpretq_u32_f32(x.val[1]), vreinterpretq_u32_f32(y.val[1])));
-  z.val[2] = vreinterpretq_f32_u32(vorrq_u32(vreinterpretq_u32_f32(x.val[2]), vreinterpretq_u32_f32(y.val[2])));
-  z.val[3] = vreinterpretq_f32_u32(vorrq_u32(vreinterpretq_u32_f32(x.val[3]), vreinterpretq_u32_f32(y.val[3])));
-  return z;
+static inline float32x4_t vbitor(float32x4_t x, float32x4_t y) {
+  return vreinterpretq_f32_u32(vorrq_u32(vreinterpretq_u32_f32(x), vreinterpretq_u32_f32(y)));
 }
 
-static void op_affine(struct Env * env, Inst * code, struct Tbl * tbl, size_t ip, Inst inst) {
-  float32x4x4_t a = vdup(inst.affine.a);
-  float32x4x4_t b = vdup(inst.affine.b);
-  float32x4x4_t c = vdup(inst.affine.c);
-  float32x4x4_t x = vld1q_f32_x4(&env->x[0]);
-  float32x4x4_t y = vld1q_f32_x4(&env->y[0]);
-  vst1q_f32_x4(&env->v[ip][0], vadd(vadd(vmul(a, x), vmul(b, y)), c));
-  DISPATCH(env, code, tbl, ip + 1);
+static void op_affine(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+  float32x4x4_t a = vdup(ins.affine.a);
+  float32x4x4_t b = vdup(ins.affine.b);
+  float32x4x4_t c = vdup(ins.affine.c);
+  float32x4x4_t x = vld1q_f32_x4(env->x);
+  float32x4x4_t y = vld1q_f32_x4(env->y);
+  vst1q_f32_x4(env->v[ip], vadd(vadd(vmul(a, x), vmul(b, y)), c));
+  DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_hypot2(struct Env * env, Inst * code, struct Tbl * tbl, size_t ip, Inst inst) {
-  float32x4x4_t x = vld1q_f32_x4(&env->v[inst.hypot2.x][0]);
-  float32x4x4_t y = vld1q_f32_x4(&env->v[inst.hypot2.y][0]);
-  vst1q_f32_x4(&env->v[ip][0], vadd(vmul(x, x), vmul(y, y)));
-  DISPATCH(env, code, tbl, ip + 1);
+static void op_hypot2(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+  float32x4x4_t x = vld1q_f32_x4(env->v[ins.hypot2.x]);
+  float32x4x4_t y = vld1q_f32_x4(env->v[ins.hypot2.y]);
+  vst1q_f32_x4(env->v[ip], vadd(vmul(x, x), vmul(y, y)));
+  DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_le(struct Env * env, Inst * code, struct Tbl * tbl, size_t ip, Inst inst) {
-  float32x4x4_t x = vld1q_f32_x4(&env->v[inst.le.x][0]);
-  float32x4x4_t t = vdup(inst.le.t);
-  vst1q_f32_x4(&env->v[ip][0], vle(x, t));
-  DISPATCH(env, code, tbl, ip + 1);
+static void op_le(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+  float32x4x4_t x = vld1q_f32_x4(env->v[ins.le.x]);
+  float32x4x4_t t = vdup(ins.le.t);
+  vst1q_f32(env->v[ip], vle(x, t));
+  DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_ge(struct Env * env, Inst * code, struct Tbl * tbl, size_t ip, Inst inst) {
-  float32x4x4_t x = vld1q_f32_x4(&env->v[inst.ge.x][0]);
-  float32x4x4_t t = vdup(inst.ge.t);
-  vst1q_f32_x4(&env->v[ip][0], vge(x, t));
-  DISPATCH(env, code, tbl, ip + 1);
+static void op_ge(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+  float32x4x4_t x = vld1q_f32_x4(env->v[ins.ge.x]);
+  float32x4x4_t t = vdup(ins.ge.t);
+  vst1q_f32(env->v[ip], vge(x, t));
+  DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_and(struct Env * env, Inst * code, struct Tbl * tbl, size_t ip, Inst inst) {
-  float32x4x4_t x = vld1q_f32_x4(&env->v[inst.and.x][0]);
-  float32x4x4_t y = vld1q_f32_x4(&env->v[inst.and.y][0]);
-  vst1q_f32_x4(&env->v[ip][0], vbitand(x, y));
-  DISPATCH(env, code, tbl, ip + 1);
+static void op_and(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+  float32x4_t x = vld1q_f32(env->v[ins.and.x]);
+  float32x4_t y = vld1q_f32(env->v[ins.and.y]);
+  vst1q_f32(env->v[ip], vbitand(x, y));
+  DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_or(struct Env * env, Inst * code, struct Tbl * tbl, size_t ip, Inst inst) {
-  float32x4x4_t x = vld1q_f32_x4(&env->v[inst.or.x][0]);
-  float32x4x4_t y = vld1q_f32_x4(&env->v[inst.or.y][0]);
-  vst1q_f32_x4(&env->v[ip][0], vbitor(x, y));
-  DISPATCH(env, code, tbl, ip + 1);
+static void op_or(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+  float32x4_t x = vld1q_f32(env->v[ins.or.x]);
+  float32x4_t y = vld1q_f32(env->v[ins.or.y]);
+  vst1q_f32(env->v[ip], vbitor(x, y));
+  DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_ret(struct Env * env, Inst * code, struct Tbl * tbl, size_t ip, Inst inst) {
+static void op_ret(struct Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
   (void) code;
   (void) tbl;
   (void) ip;
-  vst1q_f32_x4(&env->z[0], vld1q_f32_x4(&env->v[inst.ret.x][0]));
+  vst1q_u8(out, vreinterpretq_u8_f32(vld1q_f32(env->v[ins.ret.x])));
 }
 
 static struct Tbl TBL = {
@@ -144,6 +138,6 @@ static struct Tbl TBL = {
   }
 };
 
-void eval(struct Env * env, Inst * code) {
-  DISPATCH(env, code, &TBL, 0);
+void eval(struct Env * env, Ins * code, uint8_t out[16]) {
+  DISPATCH(env, code, out, &TBL, 0);
 }

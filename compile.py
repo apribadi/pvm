@@ -33,9 +33,9 @@ for line in sys.stdin:
 code.append(("le", Var(len(code) - 1), 0.0))
 code.append(("ret", Var(len(code) - 1)))
 
-def substitute_vars(inst, f):
+def substitute_vars(ins, f):
     out = []
-    for x in inst:
+    for x in ins:
         if isinstance(x, Var):
             out.append(f(x))
         else:
@@ -47,21 +47,21 @@ def push(x, y):
     x.append(y)
     return n
 
-def emit(out, cse, inst):
-    if inst in cse:
-        return cse[inst]
-    i = Var(push(out, inst))
-    cse[inst] = i
+def emit(out, cse, ins):
+    if ins in cse:
+        return cse[ins]
+    i = Var(push(out, ins))
+    cse[ins] = i
     return i
 
-def simplify(out, cse, inst):
-    match inst:
+def simplify(out, cse, ins):
+    match ins:
         case "var-x",:
             return emit(out, cse, ("affine", 1.0, 0.0, 0.0))
         case "var-y",:
             return emit(out, cse, ("affine", 0.0, 1.0, 0.0))
         case "const", float(_):
-            return emit(out, cse, inst)
+            return emit(out, cse, ins)
         case op, Var(x):
             match (op, out[x]):
                 case "neg", ("affine", a, b, c):
@@ -161,9 +161,9 @@ def lower(code):
     cse = {}
     map = [] # old var -> new var
 
-    for inst in code:
-        inst = substitute_vars(inst, lambda i: map[i])
-        map.append(simplify(out, cse, inst))
+    for ins in code:
+        ins = substitute_vars(ins, lambda i: map[i])
+        map.append(simplify(out, cse, ins))
 
     # Dead Code Elimination
 
@@ -171,19 +171,19 @@ def lower(code):
     used = [False for _ in code]
     used[-1] = True
 
-    for i, inst in reversed(list(enumerate(code))):
+    for i, ins in reversed(list(enumerate(code))):
         if used[i]:
-            for x in inst:
+            for x in ins:
                 if isinstance(x, Var):
                     used[x] = True
 
     out = []
     map = [] # old var -> new var
 
-    for i, inst in enumerate(code):
+    for i, ins in enumerate(code):
         if used[i]:
-            inst = substitute_vars(inst, lambda i: map[i])
-            map.append(Var(push(out, inst)))
+            ins = substitute_vars(ins, lambda i: map[i])
+            map.append(Var(push(out, ins)))
         else:
             map.append(None)
 
@@ -195,10 +195,10 @@ from collections import defaultdict
 
 counts = defaultdict(lambda: 0)
 
-for i, inst in enumerate(code):
-    counts[inst[0]] += 1
-    inst = substitute_vars(inst, lambda i: code[i])
-    print(Var(i), "=", inst)
+for i, ins in enumerate(code):
+    counts[ins[0]] += 1
+    ins = substitute_vars(ins, lambda i: code[i])
+    print(Var(i), "=", ins)
 
 for x, y in counts.items():
     print(x, y)

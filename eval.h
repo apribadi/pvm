@@ -19,15 +19,15 @@ typedef struct {
     struct { uint16_t x; uint16_t y; } or;
     struct { uint16_t x; } ret;
   };
-} Inst;
+} Ins;
 
-#define MAX_INST 8192
+#define MAX_INS 8192
+#define RES 1024
 
 struct Env {
-  float v[16][MAX_INST];
+  float v[16][MAX_INS];
   float x[16];
   float y[16];
-  float z[16];
 };
 
-void eval(struct Env *, Inst *);
+void eval(struct Env *, Ins *, uint8_t[16]);
