@@ -15,6 +15,8 @@ class Var(int):
     def as_var(self):
         return self
 
+# Read input from stdin and generate instructions line by line
+
 code = []
 
 for line in sys.stdin:
@@ -29,19 +31,10 @@ for line in sys.stdin:
         case "add" | "sub" | "mul" | "max" | "min" | "neg" | "square" | "sqrt":
             code.append((op, *(Var(int(arg.lstrip("_"), 16)) for arg in args)))
         case _:
-            raise
+            raise RuntimeError("cant't parse input instruction: {line}")
 
 code.append(("le_imm", Var(len(code) - 1), 0.0))
 code.append(("result", Var(len(code) - 1)))
-
-def substitute_vars(ins, f):
-    out = []
-    for x in ins:
-        if isinstance(x, Var):
-            out.append(f(x))
-        else:
-            out.append(x)
-    return tuple(out)
 
 def push(x, y):
     n = len(x)
@@ -69,18 +62,22 @@ def simplify(out, cse, ins):
                     return emit(out, cse, ("affine", - a, - b, - c))
                 case "square", ("affine", a, b, c):
                     if a + b < 0:
-                        return emit(out, cse, ("square", emit(out, cse, ("affine", - a + 0.0, - b + 0.0, - c + 0.0))))
+                        x = emit(out, cse, ("affine", - a + 0.0, - b + 0.0, - c + 0.0))
+                        return emit(out, cse, ("square", x))
                     else:
-                        return emit(out, cse, ("square", emit(out, cse, ("affine", a + 0.0, b + 0.0, c + 0.0))))
+                        x = emit(out, cse, ("affine", a + 0.0, b + 0.0, c + 0.0))
+                        return emit(out, cse, ("square", x))
                 case _:
                     return emit(out, cse, (op, x))
         case op, Var(x), float(c):
             match (op, out[x]):
                 case "ge_imm", ("affine", a, b, d):
                     if a + b < 0:
-                        return emit(out, cse, ("le_imm", emit(out, cse, ("affine", - a + 0.0, - b + 0.0, 0.0)), - (c - d) + 0.0))
+                        x = emit(out, cse, ("affine", - a + 0.0, - b + 0.0, 0.0))
+                        return emit(out, cse, ("le_imm", x, - (c - d) + 0.0))
                     else:
-                        return emit(out, cse, ("ge_imm", emit(out, cse, ("affine", a + 0.0, b + 0.0, 0.0)), (c - d) + 0.0))
+                        x = emit(out, cse, ("affine", a + 0.0, b + 0.0, 0.0))
+                        return emit(out, cse, ("ge_imm", x, (c - d) + 0.0))
                 case "ge_imm", ("sqrt", x):
                     if c <= 0.0:
                         return emit(out, cse, ("true",))
@@ -97,9 +94,11 @@ def simplify(out, cse, ins):
                     return simplify(out, cse, ("or", x, y))
                 case "le_imm", ("affine", a, b, d):
                     if a + b < 0:
-                        return emit(out, cse, ("ge_imm", emit(out, cse, ("affine", - a + 0.0, - b + 0.0, 0.0)), - (c - d) + 0.0))
+                        x = emit(out, cse, ("affine", - a + 0.0, - b + 0.0, 0.0))
+                        return emit(out, cse, ("ge_imm", x, - (c - d) + 0.0))
                     else:
-                        return emit(out, cse, ("le_imm", emit(out, cse, ("affine", a + 0.0, b + 0.0, 0.0)), (c - d) + 0.0))
+                        x = emit(out, cse, ("affine", a + 0.0, b + 0.0, 0.0))
+                        return emit(out, cse, ("le_imm", x, (c - d) + 0.0))
                 case "le_imm", ("sqrt", x):
                     if c < 0.0:
                         return emit(out, cse, ("false",))
@@ -153,46 +152,54 @@ def simplify(out, cse, ins):
                 case _:
                     return emit(out, cse, (op, x, y))
         case _:
-            raise
+            raise RuntimeError("can't simplify instruction: {ins}")
 
-def lower(code):
-    # Simplification and Common Subexpression Elimination
-
+def substitute_vars(ins, f):
     out = []
-    cse = {}
-    map = [] # old var -> new var
-
-    for ins in code:
-        ins = substitute_vars(ins, lambda i: map[i])
-        map.append(simplify(out, cse, ins))
-
-    # Dead Code Elimination
-
-    code = out
-    used = [False for _ in code]
-    used[-1] = True
-
-    for i, ins in reversed(list(enumerate(code))):
-        if used[i]:
-            for x in ins:
-                if isinstance(x, Var):
-                    used[x] = True
-
-    out = []
-    map = [] # old var -> new var
-
-    for i, ins in enumerate(code):
-        if used[i]:
-            ins = substitute_vars(ins, lambda i: map[i])
-            map.append(Var(push(out, ins)))
+    for x in ins:
+        if isinstance(x, Var):
+            out.append(f(x))
         else:
-            map.append(None)
+            out.append(x)
+    return tuple(out)
 
-    return out
+# Simplification and Common Subexpression Elimination
 
-code = lower(code)
+out = []
+cse = {}
+map = [] # old var -> new var
 
-print(f"static Ins PROSPERO[{len(code) + 1}] = {{")
+for ins in code:
+    ins = substitute_vars(ins, lambda i: map[i])
+    map.append(simplify(out, cse, ins))
+
+code = out
+
+# Dead Code Elimination
+
+used = [False for _ in code]
+used[-1] = True
+
+for i, ins in reversed(list(enumerate(code))):
+    if used[i]:
+        for x in ins:
+            if isinstance(x, Var):
+                used[x] = True
+
+out = []
+map = [] # old var -> new var
+
+for i, ins in enumerate(code):
+    if used[i]:
+        ins = substitute_vars(ins, lambda i: map[i])
+        map.append(Var(push(out, ins)))
+    else:
+        map.append(None)
+
+code = out
+
+print(f"static Ins PROSPERO[{len(code)}] = {{")
+
 for i, ins in enumerate(code):
     match ins:
         case "affine", a, b, c:
@@ -210,6 +217,6 @@ for i, ins in enumerate(code):
         case "result", x:
             print(f"  [{i}] = {{ RESULT, .result = {{ {x} }} }}")
         case _:
-            raise
+            raise RuntimeError(f"can't lower instruction: {ins}")
 
 print(f"}};")

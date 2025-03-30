@@ -2,8 +2,9 @@
 
 default: go
 
+
 CFLAGS = \
-	-fsanitize=undefined \
+  -fsanitize=undefined \
 	-std=c2x \
 	-O2 \
 	-march=native \

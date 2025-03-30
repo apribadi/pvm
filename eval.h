@@ -22,10 +22,9 @@ typedef struct {
 } Ins;
 
 #define MAX_INS 8192
-#define RES 1024
 
 typedef struct {
-  float v[16][MAX_INS];
+  float v[MAX_INS][16];
   float x[16];
   float y[16];
 } __attribute__((aligned(64))) Env;
