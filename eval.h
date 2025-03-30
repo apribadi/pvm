@@ -28,6 +28,6 @@ typedef struct {
   float v[16][MAX_INS];
   float x[16];
   float y[16];
-} Env;
+} __attribute__((aligned(64))) Env;
 
 void eval(Env *, Ins *, uint8_t[16]);

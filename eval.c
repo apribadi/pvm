@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 #include <math.h>
 #include <arm_neon.h>
 
@@ -7,13 +8,13 @@
 
 struct Tbl;
 
-typedef void (*Op)(Env *, Ins *, uint8_t out[16], struct Tbl *, size_t, Ins);
+typedef __uint128_t (*Op)(Env *, Ins *, uint8_t out[16], struct Tbl *, size_t, Ins);
 
 struct Tbl { Op ops[7]; };
 
-static inline void DISPATCH(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip) {
+static inline __uint128_t DISPATCH(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip) {
   Ins ins = code[ip];
-  tbl->ops[ins.tag](env, code, out, tbl, ip, ins);
+  return tbl->ops[ins.tag](env, code, out, tbl, ip, ins);
 }
 
 static inline float32x4x4_t vmul(float32x4x4_t x, float32x4x4_t y) {
@@ -74,56 +75,59 @@ static inline float32x4_t vbitor(float32x4_t x, float32x4_t y) {
   return vreinterpretq_f32_u32(vorrq_u32(vreinterpretq_u32_f32(x), vreinterpretq_u32_f32(y)));
 }
 
-static void op_affine(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static __uint128_t op_affine(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4x4_t a = vdup(ins.affine.a);
   float32x4x4_t b = vdup(ins.affine.b);
   float32x4x4_t c = vdup(ins.affine.c);
   float32x4x4_t x = vld1q_f32_x4(env->x);
   float32x4x4_t y = vld1q_f32_x4(env->y);
   vst1q_f32_x4(env->v[ip], vadd(vadd(vmul(a, x), vmul(b, y)), c));
-  DISPATCH(env, code, out, tbl, ip + 1);
+  return DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_hypot2(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static __uint128_t op_hypot2(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4x4_t x = vld1q_f32_x4(env->v[ins.hypot2.x]);
   float32x4x4_t y = vld1q_f32_x4(env->v[ins.hypot2.y]);
   vst1q_f32_x4(env->v[ip], vadd(vmul(x, x), vmul(y, y)));
-  DISPATCH(env, code, out, tbl, ip + 1);
+  return DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_le_imm(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static __uint128_t op_le_imm(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4x4_t x = vld1q_f32_x4(env->v[ins.le_imm.x]);
   float32x4x4_t t = vdup(ins.le_imm.t);
   vst1q_f32(env->v[ip], vle(x, t));
-  DISPATCH(env, code, out, tbl, ip + 1);
+  return DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_ge_imm(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static __uint128_t op_ge_imm(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4x4_t x = vld1q_f32_x4(env->v[ins.ge_imm.x]);
   float32x4x4_t t = vdup(ins.ge_imm.t);
   vst1q_f32(env->v[ip], vge(x, t));
-  DISPATCH(env, code, out, tbl, ip + 1);
+  return DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_and(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static __uint128_t op_and(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4_t x = vld1q_f32(env->v[ins.and.x]);
   float32x4_t y = vld1q_f32(env->v[ins.and.y]);
   vst1q_f32(env->v[ip], vbitand(x, y));
-  DISPATCH(env, code, out, tbl, ip + 1);
+  return DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_or(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static __uint128_t op_or(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4_t x = vld1q_f32(env->v[ins.or.x]);
   float32x4_t y = vld1q_f32(env->v[ins.or.y]);
   vst1q_f32(env->v[ip], vbitor(x, y));
-  DISPATCH(env, code, out, tbl, ip + 1);
+  return DISPATCH(env, code, out, tbl, ip + 1);
 }
 
-static void op_result(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static __uint128_t op_result(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
   (void) code;
   (void) tbl;
   (void) ip;
-  vst1q_u8(out, vreinterpretq_u8_f32(vld1q_f32(env->v[ins.result.x])));
+  uint8x16_t x = vreinterpretq_u8_f32(vld1q_f32(env->v[ins.result.x]));
+  __uint128_t y;
+  memcpy(&y, &x, 16);
+  return y;
 }
 
 static struct Tbl TBL = {
@@ -139,5 +143,15 @@ static struct Tbl TBL = {
 };
 
 void eval(Env * env, Ins * code, uint8_t out[16]) {
-  DISPATCH(env, code, out, &TBL, 0);
+  size_t i = 0;
+  while (1) {
+    Ins ins = code[i];
+  }
+  __uint128_t x = DISPATCH(env, code, out, &TBL, 0);
+  memcpy(out, &x, 16);
+  /*
+  for (size_t i = 0; i < n; ++ i) {
+    DISPATCH(env, code, out, &TBL, i);
+  }
+  */
 }

@@ -9,7 +9,7 @@ class Var(int):
     __match_args__ = ("as_var",)
 
     def __repr__(self):
-        return f"Var({int(self)})"
+        return f"{int(self)}"
 
     @property
     def as_var(self):
@@ -193,22 +193,22 @@ def lower(code):
 code = lower(code)
 
 print(f"static Ins PROSPERO[{len(code) + 1}] = {{")
-for ins in code:
+for i, ins in enumerate(code):
     match ins:
         case "affine", a, b, c:
-            print(f"  {{ AFFINE, .affine = {{ {a:.9}f, {b:.9}f, {c:.9}f }} }},")
+            print(f"  [{i}] = {{ AFFINE, .affine = {{ {a:.9}f, {b:.9}f, {c:.9}f }} }},")
         case "hypot2", x, y:
-            print(f"  {{ HYPOT2, .hypot2 = {{ {int(x)}, {int(y)} }} }},")
+            print(f"  [{i}] = {{ HYPOT2, .hypot2 = {{ {x}, {y} }} }},")
         case "le_imm", x, t:
-            print(f"  {{ LE_IMM, .le_imm = {{ {int(x)}, {t:.9}f }} }},")
+            print(f"  [{i}] = {{ LE_IMM, .le_imm = {{ {x}, {t:.9}f }} }},")
         case "ge_imm", x, t:
-            print(f"  {{ GE_IMM, .ge_imm = {{ {int(x)}, {t:.9}f }} }},")
+            print(f"  [{i}] = {{ GE_IMM, .ge_imm = {{ {x}, {t:.9}f }} }},")
         case "and", x, y:
-            print(f"  {{ AND, .and = {{ {int(x)}, {int(y)} }} }},")
+            print(f"  [{i}] = {{ AND, .and = {{ {x}, {y} }} }},")
         case "or", x, y:
-            print(f"  {{ OR, .or = {{ {int(x)}, {int(y)} }} }},")
+            print(f"  [{i}] = {{ OR, .or = {{ {x}, {y} }} }},")
         case "result", x:
-            print(f"  {{ RESULT, .result = {{ {int(x)} }} }}")
+            print(f"  [{i}] = {{ RESULT, .result = {{ {x} }} }}")
         case _:
             raise
 
