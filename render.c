@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <omp.h>
 #include <arm_neon.h>
 
 #include "render.h"
@@ -133,7 +134,7 @@ static struct Tbl TBL = {
   }
 };
 
-void render(Env * env, Ins * code, uint8_t image[RESOLUTION][RESOLUTION]) {
+void render(Env env[NUM_THREADS], Ins * code, uint8_t image[RESOLUTION][RESOLUTION]) {
   float xmin = -1.0;
   // float xmax = 1.0;
   // float ymin = -1.0;
@@ -142,33 +143,18 @@ void render(Env * env, Ins * code, uint8_t image[RESOLUTION][RESOLUTION]) {
   float step = side / RESOLUTION;
   float half = step * 0.5f;
 
-  /*
-  float32x4x4_t xoff;
-  for (size_t k = 0; k < 16; k ++) {
-    xoff.val[k >> 4][k & 15] = step * (float) k;
-  }
-
+#pragma omp parallel for num_threads(NUM_THREADS)
   for (size_t i = 0; i < RESOLUTION; i ++) {
     float y = ymax - half - step * (float) i;
-    vst1q_f32_x4(env->y, vdup(y));
-    for (size_t j = 0; j < RESOLUTION; j += 16) {
-      float x = xmin + half + step * (float) j;
-      vst1q_f32_x4(env->x, vadd(vdup(x), xoff));
-      size_t result = DISPATCH(env, code, &TBL, 0);
-      memcpy(&image[i][j], env->v[result], 16);
-    }
-  }
-  */
-  for (size_t i = 0; i < RESOLUTION; i ++) {
-    float y = ymax - half - step * (float) i;
+    Env * tenv = &env[omp_get_thread_num()];
     for (size_t j = 0; j < RESOLUTION; j += 16) {
       float x = xmin + half + step * (float) j;
       for (size_t k = 0; k < 16; k ++) {
-        env->x[k] = x + step * (float) k;
-        env->y[k] = y;
+        tenv->x[k] = x + step * (float) k;
+        tenv->y[k] = y;
       }
-      size_t result = DISPATCH(env, code, &TBL, 0);
-      memcpy(&image[i][j], env->v[result], 16);
+      size_t result = DISPATCH(tenv, code, &TBL, 0);
+      memcpy(&image[i][j], tenv->v[result], 16);
     }
   }
 }

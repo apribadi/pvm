@@ -16,16 +16,20 @@ CFLAGS = \
 	-fno-math-errno \
 	-fno-omit-frame-pointer \
 	-fno-slp-vectorize \
-	-pedantic
+	-pedantic \
+	-fopenmp=libomp
+
+CC = \
+	/opt/homebrew/Cellar/llvm/19.1.7_1/bin/clang
 
 go: main.c render.h render.o
-	clang -o $@ $< render.o $(CFLAGS)
+	$(CC) -o $@ $< render.o $(CFLAGS)
+
+render.o: render.c render.h prospero.c
+	$(CC) -c -o $@ $< $(CFLAGS)
 
 prospero.c: compile.py prospero.vm
 	./compile.py < prospero.vm > prospero.c
-
-render.o: render.c render.h prospero.c
-	clang -c -o $@ $< $(CFLAGS)
 
 clean:
 	rm -f go
