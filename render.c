@@ -133,21 +133,27 @@ static struct Tbl TBL = {
   }
 };
 
-void render_mini(Env * env, Ins * code, uint8_t out[16]) {
-  size_t result = DISPATCH(env, code, &TBL, 0);
-  memcpy(out, env->v[result], 16);
-}
-
 void render(Env * env, Ins * code, uint8_t image[RESOLUTION][RESOLUTION]) {
   float xmin = -1.0;
-  float xmax = 1.0;
-  float ymin = -1.0;
+  // float xmax = 1.0;
+  // float ymin = -1.0;
   float ymax = 1.0;
   float side = 2.0;
   float step = side / RESOLUTION;
+  float half = step * 0.5f;
 
-  for (size_t i = 0; i < RESOLUTION; ++ i) {
-    for (size_t j = 0; j < RESOLUTION; ++ j) {
+  for (size_t i = 0; i < RESOLUTION; i ++) {
+    float y = ymax - half - step * (float) i;
+    for (size_t k = 0; k < 16; k ++) {
+      env->y[k] = y;
+    }
+    for (size_t j = 0; j < RESOLUTION; j += 16) {
+      float x = xmin + half + step * (float) j;
+      for (size_t k = 0; k < 16; k ++) {
+        env->x[k] = x + step * (float) k;
+      }
+      size_t result = DISPATCH(env, code, &TBL, 0);
+      memcpy(&image[i][j], env->v[result], 16);
     }
   }
 }
