@@ -4,17 +4,17 @@
 #include <math.h>
 #include <arm_neon.h>
 
-#include "eval.h"
+#include "render.h"
 
 struct Tbl;
 
-typedef int (*Op)(Env *, Ins *, uint8_t out[16], struct Tbl *, size_t, Ins);
+typedef size_t (*Op)(Env *, Ins *, struct Tbl *, size_t, Ins);
 
 struct Tbl { Op ops[7]; };
 
-static inline int DISPATCH(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip) {
+static inline size_t DISPATCH(Env * env, Ins * code, struct Tbl * tbl, size_t ip) {
   Ins ins = code[ip];
-  return tbl->ops[ins.tag](env, code, out, tbl, ip, ins);
+  return tbl->ops[ins.tag](env, code, tbl, ip, ins);
 }
 
 static inline float32x4x4_t vmul(float32x4x4_t x, float32x4x4_t y) {
@@ -57,14 +57,7 @@ static inline float32x4_t vle(float32x4x4_t x, float32x4x4_t y) {
 }
 
 static inline float32x4_t vge(float32x4x4_t x, float32x4x4_t y) {
-  float32x4_t a = vcgeq_f32(x.val[0], y.val[0]);
-  float32x4_t b = vcgeq_f32(x.val[1], y.val[1]);
-  float32x4_t c = vcgeq_f32(x.val[2], y.val[2]);
-  float32x4_t d = vcgeq_f32(x.val[3], y.val[3]);
-  uint16x8_t e = vuzp1q_u16(vreinterpretq_u16_f32(a), vreinterpretq_u16_f32(b));
-  uint16x8_t f = vuzp1q_u16(vreinterpretq_u16_f32(c), vreinterpretq_u16_f32(d));
-  uint8x16_t g = vuzp1q_u8(vreinterpretq_u8_u16(e), vreinterpretq_u8_u16(f));
-  return vreinterpretq_f32_u8(g);
+  return vle(y, x);
 }
 
 static inline float32x4_t vbitand(float32x4_t x, float32x4_t y) {
@@ -75,57 +68,57 @@ static inline float32x4_t vbitor(float32x4_t x, float32x4_t y) {
   return vreinterpretq_f32_u32(vorrq_u32(vreinterpretq_u32_f32(x), vreinterpretq_u32_f32(y)));
 }
 
-static int op_affine(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t op_affine(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4x4_t a = vdup(ins.affine.a);
   float32x4x4_t b = vdup(ins.affine.b);
   float32x4x4_t c = vdup(ins.affine.c);
   float32x4x4_t x = vld1q_f32_x4(env->x);
   float32x4x4_t y = vld1q_f32_x4(env->y);
   vst1q_f32_x4(env->v[ip], vadd(vadd(vmul(a, x), vmul(b, y)), c));
-  return DISPATCH(env, code, out, tbl, ip + 1);
+  return DISPATCH(env, code, tbl, ip + 1);
 }
 
-static int op_hypot2(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t op_hypot2(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4x4_t x = vld1q_f32_x4(env->v[ins.hypot2.x]);
   float32x4x4_t y = vld1q_f32_x4(env->v[ins.hypot2.y]);
   vst1q_f32_x4(env->v[ip], vadd(vmul(x, x), vmul(y, y)));
-  return DISPATCH(env, code, out, tbl, ip + 1);
+  return DISPATCH(env, code, tbl, ip + 1);
 }
 
-static int op_le_imm(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t op_le_imm(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4x4_t x = vld1q_f32_x4(env->v[ins.le_imm.x]);
   float32x4x4_t t = vdup(ins.le_imm.t);
   vst1q_f32(env->v[ip], vle(x, t));
-  return DISPATCH(env, code, out, tbl, ip + 1);
+  return DISPATCH(env, code, tbl, ip + 1);
 }
 
-static int op_ge_imm(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t op_ge_imm(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4x4_t x = vld1q_f32_x4(env->v[ins.ge_imm.x]);
   float32x4x4_t t = vdup(ins.ge_imm.t);
   vst1q_f32(env->v[ip], vge(x, t));
-  return DISPATCH(env, code, out, tbl, ip + 1);
+  return DISPATCH(env, code, tbl, ip + 1);
 }
 
-static int op_and(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t op_and(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4_t x = vld1q_f32(env->v[ins.and.x]);
   float32x4_t y = vld1q_f32(env->v[ins.and.y]);
   vst1q_f32(env->v[ip], vbitand(x, y));
-  return DISPATCH(env, code, out, tbl, ip + 1);
+  return DISPATCH(env, code, tbl, ip + 1);
 }
 
-static int op_or(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t op_or(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4_t x = vld1q_f32(env->v[ins.or.x]);
   float32x4_t y = vld1q_f32(env->v[ins.or.y]);
   vst1q_f32(env->v[ip], vbitor(x, y));
-  return DISPATCH(env, code, out, tbl, ip + 1);
+  return DISPATCH(env, code, tbl, ip + 1);
 }
 
-static int op_result(Env * env, Ins * code, uint8_t out[16], struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t op_result(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
+  (void) env;
   (void) code;
   (void) tbl;
   (void) ip;
-  memcpy(out, env->v[ins.result.x], 16);
-  return 0;
+  return ins.result.x;
 }
 
 static struct Tbl TBL = {
@@ -140,12 +133,21 @@ static struct Tbl TBL = {
   }
 };
 
-void eval(Env * env, Ins * code, uint8_t out[16]) {
-  (void) DISPATCH(env, code, out, &TBL, 0);
-  /*
-  size_t i = 0;
-  for (size_t i = 0; i < n; ++ i) {
-    DISPATCH(env, code, out, &TBL, i);
+void render_mini(Env * env, Ins * code, uint8_t out[16]) {
+  size_t result = DISPATCH(env, code, &TBL, 0);
+  memcpy(out, env->v[result], 16);
+}
+
+void render(Env * env, Ins * code, uint8_t image[RESOLUTION][RESOLUTION]) {
+  float xmin = -1.0;
+  float xmax = 1.0;
+  float ymin = -1.0;
+  float ymax = 1.0;
+  float side = 2.0;
+  float step = side / RESOLUTION;
+
+  for (size_t i = 0; i < RESOLUTION; ++ i) {
+    for (size_t j = 0; j < RESOLUTION; ++ j) {
+    }
   }
-  */
 }

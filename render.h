@@ -1,3 +1,6 @@
+#define MAX_INSTRUCTIONS 8192
+#define RESOLUTION 1024
+
 typedef enum {
   AFFINE,
   HYPOT2,
@@ -21,12 +24,10 @@ typedef struct {
   };
 } Ins;
 
-#define MAX_INS 8192
-
 typedef struct {
-  float v[MAX_INS][16];
+  float v[MAX_INSTRUCTIONS][16];
   float x[16];
   float y[16];
 } __attribute__((aligned(64))) Env;
 
-void eval(Env *, Ins *, uint8_t[16]);
+void render(Env *, Ins *, uint8_t image[RESOLUTION][RESOLUTION]);

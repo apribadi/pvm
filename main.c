@@ -1,12 +1,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "eval.h"
+#include "render.h"
 #include "prospero.c"
 
-#define RES 1024
-
-static uint8_t IMAGE[RES][RES];
+static uint8_t IMAGE[RESOLUTION][RESOLUTION];
 
 static Env ENV;
 
@@ -19,7 +17,7 @@ int main(int argc, char ** argv) {
     ENV.y[i] = 0;
   }
 
-  eval(&ENV, PROSPERO, &IMAGE[0][0]);
+  render(&ENV, PROSPERO, IMAGE);
 
   return 0;
 }

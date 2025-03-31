@@ -4,7 +4,6 @@ default: go
 
 
 CFLAGS = \
-  -fsanitize=undefined \
 	-std=c2x \
 	-O2 \
 	-march=native \
@@ -18,16 +17,16 @@ CFLAGS = \
 	-fno-slp-vectorize \
 	-pedantic
 
-go: main.c eval.h eval.o
-	clang -o $@ $< eval.o $(CFLAGS)
+go: main.c render.h render.o
+	clang -o $@ $< render.o $(CFLAGS)
 
 prospero.c: compile.py prospero.vm
 	./compile.py < prospero.vm > prospero.c
 
-eval.o: eval.c eval.h prospero.c
+render.o: render.c render.h prospero.c
 	clang -c -o $@ $< $(CFLAGS)
 
 clean:
 	rm -f go
 	rm -f prospero.c
-	rm -f eval.o
+	rm -f render.o
