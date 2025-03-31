@@ -2,4 +2,5 @@
 *.swp
 go
 prospero.c
+prospero.pgm
 prospero.vm
