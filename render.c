@@ -142,16 +142,17 @@ void render(Env * env, Ins * code, uint8_t image[RESOLUTION][RESOLUTION]) {
   float step = side / RESOLUTION;
   float half = step * 0.5f;
 
+  float32x4x4_t xoff;
+  for (size_t k = 0; k < 16; k ++) {
+    xoff.val[k >> 4][k & 15] = step * (float) k;
+  }
+
   for (size_t i = 0; i < RESOLUTION; i ++) {
     float y = ymax - half - step * (float) i;
-    for (size_t k = 0; k < 16; k ++) {
-      env->y[k] = y;
-    }
+    vst1q_f32_x4(env->y, vdup(y));
     for (size_t j = 0; j < RESOLUTION; j += 16) {
       float x = xmin + half + step * (float) j;
-      for (size_t k = 0; k < 16; k ++) {
-        env->x[k] = x + step * (float) k;
-      }
+      vst1q_f32_x4(env->x, vadd(vdup(x), xoff));
       size_t result = DISPATCH(env, code, &TBL, 0);
       memcpy(&image[i][j], env->v[result], 16);
     }

@@ -2,6 +2,7 @@
 
 default: go
 
+#  -fsanitize=undefined \
 
 CFLAGS = \
 	-std=c2x \
