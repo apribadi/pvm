@@ -1,4 +1,4 @@
-#define NUM_THREADS 6
+#define NUM_THREADS 4
 #define MAX_PROGRAM_LENGTH 8192
 #define RESOLUTION 1024
 

@@ -135,11 +135,10 @@ static struct Tbl TBL = {
 };
 
 void render(Env env[NUM_THREADS], Ins * code, uint8_t image[RESOLUTION][RESOLUTION]) {
-  float xmin = -1.0;
-  // float xmax = 1.0;
-  // float ymin = -1.0;
-  float ymax = 1.0;
   float side = 2.0;
+  float xmin = -1.0;
+  float ymin = -1.0;
+  float ymax = ymin + side;
   float step = side / RESOLUTION;
   float half = step * 0.5f;
 
