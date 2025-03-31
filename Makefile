@@ -12,6 +12,7 @@ CFLAGS = \
 	-Wconversion \
 	-Wdouble-promotion \
 	-Wextra \
+	-Wno-unused-function \
 	-ffp-contract=off \
 	-fno-math-errno \
 	-fno-omit-frame-pointer \
