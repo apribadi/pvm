@@ -7,10 +7,6 @@
 
 #include "render.h"
 
-typedef struct {
-  float32x4x4_t val[2];
-} vfloat;
-
 struct Tbl;
 
 typedef size_t (*Op)(Env *, Ins *, struct Tbl *, size_t, Ins);
@@ -22,160 +18,129 @@ static inline size_t DISPATCH(Env * env, Ins * code, struct Tbl * tbl, size_t ip
   return tbl->ops[ins.tag](env, code, tbl, ip, ins);
 }
 
-static inline vfloat vload(float src[32]) {
-  vfloat r;
-  r.val[0] = vld1q_f32_x4(&src[0]);
-  r.val[1] = vld1q_f32_x4(&src[16]);
+static inline float32x4x4_t vmulx(float32x4x4_t x, float32x4x4_t y) {
+  float32x4x4_t r;
+  r.val[0] = vmulq_f32(x.val[0], y.val[0]);
+  r.val[1] = vmulq_f32(x.val[1], y.val[1]);
+  r.val[2] = vmulq_f32(x.val[2], y.val[2]);
+  r.val[3] = vmulq_f32(x.val[3], y.val[3]);
   return r;
 }
 
-static inline void vstore(float dst[32], vfloat x) {
-  vst1q_f32_x4(&dst[0], x.val[0]);
-  vst1q_f32_x4(&dst[16], x.val[1]);
-}
-
-static inline vfloat vmul(vfloat x, vfloat y) {
-  vfloat r;
-  r.val[0].val[0] = vmulq_f32(x.val[0].val[0], y.val[0].val[0]);
-  r.val[0].val[1] = vmulq_f32(x.val[0].val[1], y.val[0].val[1]);
-  r.val[0].val[2] = vmulq_f32(x.val[0].val[2], y.val[0].val[2]);
-  r.val[0].val[3] = vmulq_f32(x.val[0].val[3], y.val[0].val[3]);
-  r.val[1].val[0] = vmulq_f32(x.val[1].val[0], y.val[1].val[0]);
-  r.val[1].val[1] = vmulq_f32(x.val[1].val[1], y.val[1].val[1]);
-  r.val[1].val[2] = vmulq_f32(x.val[1].val[2], y.val[1].val[2]);
-  r.val[1].val[3] = vmulq_f32(x.val[1].val[3], y.val[1].val[3]);
+static inline float32x4x4_t vmulx_n(float32x4x4_t x, float y) {
+  float32x4x4_t r;
+  r.val[0] = vmulq_n_f32(x.val[0], y);
+  r.val[1] = vmulq_n_f32(x.val[1], y);
+  r.val[2] = vmulq_n_f32(x.val[2], y);
+  r.val[3] = vmulq_n_f32(x.val[3], y);
   return r;
 }
 
-static inline vfloat vadd(vfloat x, vfloat y) {
-  vfloat r;
-  r.val[0].val[0] = vaddq_f32(x.val[0].val[0], y.val[0].val[0]);
-  r.val[0].val[1] = vaddq_f32(x.val[0].val[1], y.val[0].val[1]);
-  r.val[0].val[2] = vaddq_f32(x.val[0].val[2], y.val[0].val[2]);
-  r.val[0].val[3] = vaddq_f32(x.val[0].val[3], y.val[0].val[3]);
-  r.val[1].val[0] = vaddq_f32(x.val[1].val[0], y.val[1].val[0]);
-  r.val[1].val[1] = vaddq_f32(x.val[1].val[1], y.val[1].val[1]);
-  r.val[1].val[2] = vaddq_f32(x.val[1].val[2], y.val[1].val[2]);
-  r.val[1].val[3] = vaddq_f32(x.val[1].val[3], y.val[1].val[3]);
+static inline float32x4x4_t vaddx(float32x4x4_t x, float32x4x4_t y) {
+  float32x4x4_t r;
+  r.val[0] = vaddq_f32(x.val[0], y.val[0]);
+  r.val[1] = vaddq_f32(x.val[1], y.val[1]);
+  r.val[2] = vaddq_f32(x.val[2], y.val[2]);
+  r.val[3] = vaddq_f32(x.val[3], y.val[3]);
   return r;
 }
 
-static inline vfloat vfma(vfloat x, vfloat y, vfloat z) {
-  vfloat r;
-  r.val[0].val[0] = vfmaq_f32(x.val[0].val[0], y.val[0].val[0], z.val[0].val[0]);
-  r.val[0].val[1] = vfmaq_f32(x.val[0].val[1], y.val[0].val[1], z.val[0].val[1]);
-  r.val[0].val[2] = vfmaq_f32(x.val[0].val[2], y.val[0].val[2], z.val[0].val[2]);
-  r.val[0].val[3] = vfmaq_f32(x.val[0].val[3], y.val[0].val[3], z.val[0].val[3]);
-  r.val[1].val[0] = vfmaq_f32(x.val[1].val[0], y.val[1].val[0], z.val[1].val[0]);
-  r.val[1].val[1] = vfmaq_f32(x.val[1].val[1], y.val[1].val[1], z.val[1].val[1]);
-  r.val[1].val[2] = vfmaq_f32(x.val[1].val[2], y.val[1].val[2], z.val[1].val[2]);
-  r.val[1].val[3] = vfmaq_f32(x.val[1].val[3], y.val[1].val[3], z.val[1].val[3]);
-  return r;
-}
-
-static inline vfloat vfma_n(vfloat x, vfloat y, float z) {
-  vfloat r;
-  r.val[0].val[0] = vfmaq_n_f32(x.val[0].val[0], y.val[0].val[0], z);
-  r.val[0].val[1] = vfmaq_n_f32(x.val[0].val[1], y.val[0].val[1], z);
-  r.val[0].val[2] = vfmaq_n_f32(x.val[0].val[2], y.val[0].val[2], z);
-  r.val[0].val[3] = vfmaq_n_f32(x.val[0].val[3], y.val[0].val[3], z);
-  r.val[1].val[0] = vfmaq_n_f32(x.val[1].val[0], y.val[1].val[0], z);
-  r.val[1].val[1] = vfmaq_n_f32(x.val[1].val[1], y.val[1].val[1], z);
-  r.val[1].val[2] = vfmaq_n_f32(x.val[1].val[2], y.val[1].val[2], z);
-  r.val[1].val[3] = vfmaq_n_f32(x.val[1].val[3], y.val[1].val[3], z);
-  return r;
-}
-
-static inline vfloat vdup(float x) {
+static inline float32x4x4_t vdupx_n(float x) {
   float32x4_t y = vdupq_n_f32(x);
-  vfloat r;
-  r.val[0].val[0] = y;
-  r.val[0].val[1] = y;
-  r.val[0].val[2] = y;
-  r.val[0].val[3] = y;
-  r.val[1].val[0] = y;
-  r.val[1].val[1] = y;
-  r.val[1].val[2] = y;
-  r.val[1].val[3] = y;
+  float32x4x4_t r;
+  r.val[0] = y;
+  r.val[1] = y;
+  r.val[2] = y;
+  r.val[3] = y;
   return r;
 }
 
-static inline uint8x16x2_t vle(vfloat x, vfloat y) {
-  vfloat z;
-  z.val[0].val[0] = vcleq_f32(x.val[0].val[0], y.val[0].val[0]);
-  z.val[0].val[1] = vcleq_f32(x.val[0].val[1], y.val[0].val[1]);
-  z.val[0].val[2] = vcleq_f32(x.val[0].val[2], y.val[0].val[2]);
-  z.val[0].val[3] = vcleq_f32(x.val[0].val[3], y.val[0].val[3]);
-  z.val[1].val[0] = vcleq_f32(x.val[1].val[0], y.val[1].val[0]);
-  z.val[1].val[1] = vcleq_f32(x.val[1].val[1], y.val[1].val[1]);
-  z.val[1].val[2] = vcleq_f32(x.val[1].val[2], y.val[1].val[2]);
-  z.val[1].val[3] = vcleq_f32(x.val[1].val[3], y.val[1].val[3]);
-  uint16x8_t a = vuzp1q_u16(vreinterpretq_u16_f32(z.val[0].val[0]), vreinterpretq_u16_f32(z.val[0].val[1]));
-  uint16x8_t b = vuzp1q_u16(vreinterpretq_u16_f32(z.val[0].val[2]), vreinterpretq_u16_f32(z.val[0].val[3]));
-  uint16x8_t c = vuzp1q_u16(vreinterpretq_u16_f32(z.val[1].val[0]), vreinterpretq_u16_f32(z.val[1].val[1]));
-  uint16x8_t d = vuzp1q_u16(vreinterpretq_u16_f32(z.val[1].val[2]), vreinterpretq_u16_f32(z.val[1].val[3]));
-  uint8x16x2_t r;
-  r.val[0] = vuzp1q_u8(vreinterpretq_u8_u16(a), vreinterpretq_u8_u16(b));
-  r.val[1] = vuzp1q_u8(vreinterpretq_u8_u16(c), vreinterpretq_u8_u16(d));
-  return r;
+static inline uint8x16_t vclex(float32x4x4_t x, float32x4x4_t y) {
+  float32x4x4_t z;
+  z.val[0] = vcleq_f32(x.val[0], y.val[0]);
+  z.val[1] = vcleq_f32(x.val[1], y.val[1]);
+  z.val[2] = vcleq_f32(x.val[2], y.val[2]);
+  z.val[3] = vcleq_f32(x.val[3], y.val[3]);
+  uint16x8_t a = vuzp1q_u16(vreinterpretq_u16_f32(z.val[0]), vreinterpretq_u16_f32(z.val[1]));
+  uint16x8_t b = vuzp1q_u16(vreinterpretq_u16_f32(z.val[2]), vreinterpretq_u16_f32(z.val[3]));
+  return vuzp1q_u8(vreinterpretq_u8_u16(a), vreinterpretq_u8_u16(b));
 }
 
-static inline uint8x16x2_t vbitand(uint8x16x2_t x, uint8x16x2_t y) {
-  uint8x16x2_t r;
+static inline uint8x16x4_t vandx(uint8x16x4_t x, uint8x16x4_t y) {
+  uint8x16x4_t r;
   r.val[0] = vandq_u8(x.val[0], y.val[0]);
   r.val[1] = vandq_u8(x.val[1], y.val[1]);
+  r.val[2] = vandq_u8(x.val[2], y.val[2]);
+  r.val[3] = vandq_u8(x.val[3], y.val[3]);
   return r;
 }
 
-static inline uint8x16x2_t vbitor(uint8x16x2_t x, uint8x16x2_t y) {
-  uint8x16x2_t r;
+static inline uint8x16x4_t vorrx(uint8x16x4_t x, uint8x16x4_t y) {
+  uint8x16x4_t r;
   r.val[0] = vorrq_u8(x.val[0], y.val[0]);
   r.val[1] = vorrq_u8(x.val[1], y.val[1]);
+  r.val[2] = vorrq_u8(x.val[2], y.val[2]);
+  r.val[3] = vorrq_u8(x.val[3], y.val[3]);
   return r;
 }
 
 static size_t op_affine(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
-  vfloat x = vload(env->x);
-  float y = env->y[0];
   float a = ins.affine.a;
   float b = ins.affine.b;
   float c = ins.affine.c;
-  vstore(env->v[ip], vfma_n(vdup(c + y * b), x, a));
+  float32x4x4_t x = vld1q_f32_x4(env->x);
+  float32x4_t y = vld1q_f32(env->y);
+  float32x4x4_t u = vmulx_n(x, a);
+  float32x4_t v = vaddq_f32(vmulq_n_f32(y, b), vdupq_n_f32(c));
+  for (size_t k = 0; k < 4; k ++) {
+    vst1q_f32_x4(&env->v[ip][16 * k],  vaddx(u, vdupx_n(v[k])));
+  }
   return DISPATCH(env, code, tbl, ip + 1);
 }
 
 static size_t op_hypot2(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
-  vfloat x = vload(env->v[ins.hypot2.x]);
-  vfloat y = vload(env->v[ins.hypot2.y]);
-  vstore(env->v[ip], vfma(vmul(x, x), y, y));
+  for (size_t k = 0; k < 4; k ++) {
+    float32x4x4_t x = vld1q_f32_x4(&env->v[ins.hypot2.x][16 * k]);
+    float32x4x4_t y = vld1q_f32_x4(&env->v[ins.hypot2.y][16 * k]);
+    vst1q_f32_x4(&env->v[ip][16 * k], vaddx(vmulx(x, x), vmulx(y, y)));
+  }
   return DISPATCH(env, code, tbl, ip + 1);
 }
 
 static size_t op_le_imm(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
-  vfloat x = vload(env->v[ins.le_imm.x]);
-  vfloat t = vdup(ins.le_imm.t);
-  vst1q_u8_x2((uint8_t *) env->v[ip], vle(x, t));
+  uint8x16x4_t r;
+  float32x4x4_t t = vdupx_n(ins.le_imm.t);
+  for (size_t k = 0; k < 4; k ++) {
+    float32x4x4_t x = vld1q_f32_x4(&env->v[ins.le_imm.x][16 * k]);
+    r.val[k] = vclex(x, t);
+  }
+  vst1q_u8_x4((uint8_t *) env->v[ip], r);
   return DISPATCH(env, code, tbl, ip + 1);
 }
 
 static size_t op_ge_imm(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
-  vfloat x = vload(env->v[ins.ge_imm.x]);
-  vfloat t = vdup(ins.ge_imm.t);
-  vst1q_u8_x2((uint8_t *) env->v[ip], vle(t, x));
+  uint8x16x4_t r;
+  float32x4x4_t t = vdupx_n(ins.ge_imm.t);
+  for (size_t k = 0; k < 4; k ++) {
+    float32x4x4_t x = vld1q_f32_x4(&env->v[ins.ge_imm.x][16 * k]);
+    r.val[k] = vclex(t, x);
+  }
+  vst1q_u8_x4((uint8_t *) env->v[ip], r);
   return DISPATCH(env, code, tbl, ip + 1);
 }
 
+
 static size_t op_and(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
-  uint8x16x2_t x = vld1q_u8_x2((uint8_t *) env->v[ins.and.x]);
-  uint8x16x2_t y = vld1q_u8_x2((uint8_t *) env->v[ins.and.y]);
-  vst1q_u8_x2((uint8_t *) env->v[ip], vbitand(x, y));
+  uint8x16x4_t x = vld1q_u8_x4((uint8_t *) env->v[ins.and.x]);
+  uint8x16x4_t y = vld1q_u8_x4((uint8_t *) env->v[ins.and.y]);
+  vst1q_u8_x4((uint8_t *) env->v[ip], vandx(x, y));
   return DISPATCH(env, code, tbl, ip + 1);
 }
 
 static size_t op_or(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
-  uint8x16x2_t x = vld1q_u8_x2((uint8_t *) env->v[ins.or.x]);
-  uint8x16x2_t y = vld1q_u8_x2((uint8_t *) env->v[ins.or.y]);
-  vst1q_u8_x2((uint8_t *) env->v[ip], vbitor(x, y));
+  uint8x16x4_t x = vld1q_u8_x4((uint8_t *) env->v[ins.or.x]);
+  uint8x16x4_t y = vld1q_u8_x4((uint8_t *) env->v[ins.or.y]);
+  vst1q_u8_x4((uint8_t *) env->v[ip], vorrx(x, y));
   return DISPATCH(env, code, tbl, ip + 1);
 }
 
@@ -208,17 +173,21 @@ void render(Env env[NUM_THREADS], Ins * code, uint8_t image[RESOLUTION][RESOLUTI
   float half = step * 0.5f;
 
 #pragma omp parallel for num_threads(NUM_THREADS)
-  for (size_t i = 0; i < RESOLUTION; i ++) {
+  for (size_t i = 0; i < RESOLUTION; i += 4) {
     Env * tenv = &env[omp_get_thread_num()];
     float y = ymax - half - step * (float) i;
-    tenv->y[0] = y;
-    for (size_t j = 0; j < RESOLUTION; j += 32) {
+    for (size_t k = 0; k < 4; k ++) {
+      tenv->y[k] = y - step * (float) k;
+    }
+    for (size_t j = 0; j < RESOLUTION; j += 16) {
       float x = xmin + half + step * (float) j;
-      for (size_t k = 0; k < 32; k ++) {
+      for (size_t k = 0; k < 16; k ++) {
         tenv->x[k] = x + step * (float) k;
       }
       size_t result = DISPATCH(tenv, code, &TBL, 0);
-      memcpy(&image[i][j], tenv->v[result], 32);
+      for (size_t k = 0; k < 4; k ++) {
+        memcpy(&image[i + k][j], &tenv->v[result][4 * k], 16);
+      }
     }
   }
 }
