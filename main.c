@@ -13,17 +13,12 @@ int main(int argc, char ** argv) {
   (void) argc;
   (void) argv;
 
-  for (size_t i = 0; i < 16; ++ i) {
-    ENV.x[i] = 0;
-    ENV.y[i] = 0;
-  }
-
   render(&ENV, PROSPERO, IMAGE);
 
   FILE * file = fopen("prospero.pgm", "w+");
   if (! file) return 1;
 
-  // we don't check fprintf's return value ...
+  // we don't check fprintf's return values ...
   fprintf(file, "P5\n");
   fprintf(file, "%d\n", RESOLUTION);
   fprintf(file, "%d\n", RESOLUTION);
