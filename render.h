@@ -1,5 +1,5 @@
 #define NUM_THREADS 4
-#define MAX_PROGRAM_LENGTH 8192
+#define PROGRAM_MAX_LEN 8192
 #define RESOLUTION 1024
 
 typedef enum {
@@ -26,7 +26,7 @@ typedef struct {
 } Ins;
 
 typedef struct {
-  float v[MAX_PROGRAM_LENGTH][16];
+  float v[PROGRAM_MAX_LEN][16];
   float x[16];
   float y[16];
 } __attribute__((aligned(64))) Env;

@@ -144,8 +144,8 @@ void render(Env env[NUM_THREADS], Ins * code, uint8_t image[RESOLUTION][RESOLUTI
 
 #pragma omp parallel for num_threads(NUM_THREADS)
   for (size_t i = 0; i < RESOLUTION; i ++) {
-    float y = ymax - half - step * (float) i;
     Env * tenv = &env[omp_get_thread_num()];
+    float y = ymax - half - step * (float) i;
     for (size_t j = 0; j < RESOLUTION; j += 16) {
       float x = xmin + half + step * (float) j;
       for (size_t k = 0; k < 16; k ++) {
