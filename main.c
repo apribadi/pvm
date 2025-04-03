@@ -17,11 +17,11 @@ int main(int argc, char ** argv) {
   uint64_t start = clock_gettime_nsec_np(CLOCK_REALTIME); // which clock ???
   render(ENV, PROSPERO, IMAGE);
   uint64_t stop = clock_gettime_nsec_np(CLOCK_REALTIME);
-  double elapsed_ms = ((double) stop - (double) start) / 1000000.;
+  double elapsed_ms = ((double) stop - (double) start) / 1000000.0;
 
   printf("rendered in %f ms ...", elapsed_ms);
 
-  FILE * file = fopen("prospero.pgm", "w+");
+  FILE * file = fopen("prospero.pgm", "w");
   if (! file) return 1;
 
   // we don't check fprintf's return values ...

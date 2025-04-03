@@ -2,7 +2,7 @@
 
 default: go
 
-#  -fsanitize=undefined \
+CC = clang
 
 CFLAGS = \
 	-std=c2x \
@@ -16,18 +16,15 @@ CFLAGS = \
 	-ffp-contract=off \
 	-fno-math-errno \
 	-fno-omit-frame-pointer \
-	-fno-slp-vectorize \
-	-pedantic \
-	-fopenmp=libomp
+	-fno-slp-vectorize
 
-CC = \
-	/opt/homebrew/Cellar/llvm/19.1.7_1/bin/clang
+#  -fsanitize=undefined \
 
-go: main.c render.h render.o
-	$(CC) -o $@ $< render.o $(CFLAGS)
+go: main.c render.h render.o prospero.c
+	$(CC) -o $@ $< render.o $(CFLAGS) -lomp -L/opt/homebrew/opt/libomp/lib
 
-render.o: render.c render.h prospero.c
-	$(CC) -c -o $@ $< $(CFLAGS)
+render.o: render.c render.h
+	$(CC) -c -o $@ $< $(CFLAGS) -Xclang -fopenmp -I/opt/homebrew/opt/libomp/include
 
 prospero.c: compile.py prospero.vm
 	./compile.py < prospero.vm > prospero.c
