@@ -1,4 +1,3 @@
-#define NUM_THREADS 4
 #define PROGRAM_MAX_LEN 8192
 #define RESOLUTION 1024
 
@@ -31,4 +30,4 @@ typedef struct {
   float y[4];
 } __attribute__((aligned(64))) Env;
 
-void render(Env env[NUM_THREADS], Ins *, uint8_t image[RESOLUTION][RESOLUTION]);
+void render(size_t num_threads, Env env[num_threads], Ins *, uint8_t image[RESOLUTION][RESOLUTION]);

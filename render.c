@@ -7,11 +7,11 @@
 
 #include "render.h"
 
-struct Tbl;
+struct EvTbl;
 
-typedef size_t (*Op)(Env *, Ins *, struct Tbl *, size_t, Ins);
+typedef size_t (*EvOp)(Env *, Ins *, struct EvTbl *, size_t, Ins);
 
-struct Tbl { Op ops[7]; };
+struct EvTbl { EvOp ops[7]; };
 
 static inline float32x4x4_t vmulx(float32x4x4_t x, float32x4x4_t y) {
   return (float32x4x4_t) {{
@@ -73,12 +73,12 @@ static inline uint8x16x4_t vorrx(uint8x16x4_t x, uint8x16x4_t y) {
   }};
 }
 
-static inline size_t DISPATCH(Env * env, Ins * code, struct Tbl * tbl, size_t ip) {
+static inline size_t ev_dispatch(Env * env, Ins * code, struct EvTbl * tbl, size_t ip) {
   Ins ins = code[ip];
   return tbl->ops[ins.tag](env, code, tbl, ip, ins);
 }
 
-static size_t op_affine(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t ev_affine(Env * env, Ins * code, struct EvTbl * tbl, size_t ip, Ins ins) {
   float32x4x4_t x = vld1q_f32_x4(env->x);
   float32x4_t y = vld1q_f32(env->y);
   float32x4x4_t u = vaddx(vmulx_n(x, ins.affine.a), vdupx_n(ins.affine.c));
@@ -86,75 +86,74 @@ static size_t op_affine(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins 
   for (size_t k = 0; k < 4; k ++) {
     vst1q_f32_x4(&env->v[ip].f32x64[16 * k],  vaddx(u, vdupx_n(v[k])));
   }
-  return DISPATCH(env, code, tbl, ip + 1);
+  return ev_dispatch(env, code, tbl, ip + 1);
 }
 
-static size_t op_hypot2(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t ev_hypot2(Env * env, Ins * code, struct EvTbl * tbl, size_t ip, Ins ins) {
   for (size_t k = 0; k < 4; k ++) {
     float32x4x4_t x = vld1q_f32_x4(&env->v[ins.hypot2.x].f32x64[16 * k]);
     float32x4x4_t y = vld1q_f32_x4(&env->v[ins.hypot2.y].f32x64[16 * k]);
     vst1q_f32_x4(&env->v[ip].f32x64[16 * k], vaddx(vmulx(x, x), vmulx(y, y)));
   }
-  return DISPATCH(env, code, tbl, ip + 1);
+  return ev_dispatch(env, code, tbl, ip + 1);
 }
 
-static size_t op_le_imm(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t ev_le_imm(Env * env, Ins * code, struct EvTbl * tbl, size_t ip, Ins ins) {
   float32x4x4_t t = vdupx_n(ins.le_imm.t);
   uint8x16x4_t r;
   for (size_t k = 0; k < 4; k ++) {
     r.val[k] = vclex(vld1q_f32_x4(&env->v[ins.le_imm.x].f32x64[16 * k]), t);
   }
   vst1q_u8_x4(env->v[ip].u8x64, r);
-  return DISPATCH(env, code, tbl, ip + 1);
+  return ev_dispatch(env, code, tbl, ip + 1);
 }
 
-static size_t op_ge_imm(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t ev_ge_imm(Env * env, Ins * code, struct EvTbl * tbl, size_t ip, Ins ins) {
   uint8x16x4_t r;
   float32x4x4_t t = vdupx_n(ins.ge_imm.t);
   for (size_t k = 0; k < 4; k ++) {
     r.val[k] = vclex(t, vld1q_f32_x4(&env->v[ins.ge_imm.x].f32x64[16 * k]));
   }
   vst1q_u8_x4(env->v[ip].u8x64, r);
-  return DISPATCH(env, code, tbl, ip + 1);
+  return ev_dispatch(env, code, tbl, ip + 1);
 }
 
-static size_t op_and(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t ev_and(Env * env, Ins * code, struct EvTbl * tbl, size_t ip, Ins ins) {
   uint8x16x4_t x = vld1q_u8_x4(env->v[ins.and.x].u8x64);
   uint8x16x4_t y = vld1q_u8_x4(env->v[ins.and.y].u8x64);
   vst1q_u8_x4(env->v[ip].u8x64, vandx(x, y));
-  return DISPATCH(env, code, tbl, ip + 1);
+  return ev_dispatch(env, code, tbl, ip + 1);
 }
 
-static size_t op_or(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t ev_or(Env * env, Ins * code, struct EvTbl * tbl, size_t ip, Ins ins) {
   uint8x16x4_t x = vld1q_u8_x4(env->v[ins.or.x].u8x64);
   uint8x16x4_t y = vld1q_u8_x4(env->v[ins.or.y].u8x64);
   vst1q_u8_x4(env->v[ip].u8x64, vorrx(x, y));
-  return DISPATCH(env, code, tbl, ip + 1);
+  return ev_dispatch(env, code, tbl, ip + 1);
 }
 
-static size_t op_result(Env *, Ins *, struct Tbl *, size_t, Ins ins) {
+static size_t ev_result(Env *, Ins *, struct EvTbl *, size_t, Ins ins) {
   return ins.result.x;
 }
 
-static struct Tbl TBL = {{
-  op_affine,
-  op_hypot2,
-  op_le_imm,
-  op_ge_imm,
-  op_and,
-  op_or,
-  op_result
+static struct EvTbl EV_TBL = {{
+  ev_affine,
+  ev_hypot2,
+  ev_le_imm,
+  ev_ge_imm,
+  ev_and,
+  ev_or,
+  ev_result
 }};
 
-void render(Env env[NUM_THREADS], Ins * code, uint8_t image[RESOLUTION][RESOLUTION]) {
+void render(size_t num_threads, Env env[num_threads], Ins * code, uint8_t image[RESOLUTION][RESOLUTION]) {
   float side = 2.0f;
-  float step = side /  RESOLUTION;
-  float half = side /  RESOLUTION / 2.0f;
+  float step = side / RESOLUTION;
   float xmin0 = -1.0f;
   float ymax0 = 1.0f;
   uint8_t * p0 = (uint8_t *) image;
 
-#pragma omp parallel for num_threads(NUM_THREADS)
+#pragma omp parallel for num_threads(num_threads)
   for (size_t t1 = 0; t1 < 16; t1 ++) {
     Env * e = &env[omp_get_thread_num()];
     size_t i1 = t1 & 3;
@@ -176,18 +175,18 @@ void render(Env env[NUM_THREADS], Ins * code, uint8_t image[RESOLUTION][RESOLUTI
         float ymax3 = ymax2 - (side / 64.0f) * (float) j3;
         uint8_t * p3 = p2 + (RESOLUTION / 64) * i3 + (RESOLUTION / 64) * RESOLUTION * j3;
         for (size_t k = 0; k < 16; k ++) {
-          e->x[k] = (xmin3 + half) + step * (float) k;
+          e->x[k] = (xmin3 + step / 2.0f) + step * (float) k;
         }
         for (size_t t4 = 0; t4 < 4; t4 ++) {
           float ymax4 = ymax3 - (side / 256.0f) * (float) t4;
           uint8_t * p4 = p3 + (RESOLUTION / 256) * RESOLUTION * t4;
           for (size_t k = 0; k < 4; k ++) {
-            e->y[k] = (ymax4 - half) - step * (float) k;
+            e->y[k] = (ymax4 - step / 2.0f) - step * (float) k;
           }
-          size_t result = DISPATCH(e, code, &TBL, 0);
+          size_t result = ev_dispatch(e, code, &EV_TBL, 0);
           for (size_t k = 0; k < 4; k ++) {
             uint8_t * p5 = p4 + RESOLUTION * k;
-            memcpy(p5, &e->v[result].u8x64[4 * k], 16);
+            memcpy(p5, &e->v[result].u8x64[16 * k], 16);
           }
         }
       }

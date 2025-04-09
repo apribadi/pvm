@@ -7,6 +7,7 @@
 #include "prospero.c"
 
 #define ITERATION_COUNT 5
+#define NUM_THREADS 4
 
 static uint8_t IMAGE[RESOLUTION][RESOLUTION];
 
@@ -17,7 +18,7 @@ int main(int argc, char ** argv) {
   (void) argv;
 
   uint64_t start = clock_gettime_nsec_np(CLOCK_REALTIME); // which clock ???
-  for (size_t i = 0; i < ITERATION_COUNT; i ++) render(ENV, PROSPERO, IMAGE);
+  for (size_t i = 0; i < ITERATION_COUNT; i ++) render(NUM_THREADS, ENV, PROSPERO, IMAGE);
   uint64_t stop = clock_gettime_nsec_np(CLOCK_REALTIME);
   double elapsed_ms = ((double) stop - (double) start) / 1000000.0;
 
