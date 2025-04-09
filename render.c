@@ -78,72 +78,72 @@ static inline size_t DISPATCH(Env * env, Ins * code, struct Tbl * tbl, size_t ip
   return tbl->ops[ins.tag](env, code, tbl, ip, ins);
 }
 
-static size_t op_eval_affine(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t op_affine(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4x4_t x = vld1q_f32_x4(env->x);
   float32x4_t y = vld1q_f32(env->y);
-  float32x4x4_t u = vmulx_n(x, ins.affine.a);
-  float32x4_t v = vaddq_f32(vmulq_n_f32(y, ins.affine.b), vdupq_n_f32(ins.affine.c));
+  float32x4x4_t u = vaddx(vmulx_n(x, ins.affine.a), vdupx_n(ins.affine.c));
+  float32x4_t v = vmulq_n_f32(y, ins.affine.b);
   for (size_t k = 0; k < 4; k ++) {
-    vst1q_f32_x4(&env->v[ip][16 * k],  vaddx(u, vdupx_n(v[k])));
+    vst1q_f32_x4(&env->v[ip].f32x64[16 * k],  vaddx(u, vdupx_n(v[k])));
   }
   return DISPATCH(env, code, tbl, ip + 1);
 }
 
-static size_t op_eval_hypot2(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t op_hypot2(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
   for (size_t k = 0; k < 4; k ++) {
-    float32x4x4_t x = vld1q_f32_x4(&env->v[ins.hypot2.x][16 * k]);
-    float32x4x4_t y = vld1q_f32_x4(&env->v[ins.hypot2.y][16 * k]);
-    vst1q_f32_x4(&env->v[ip][16 * k], vaddx(vmulx(x, x), vmulx(y, y)));
+    float32x4x4_t x = vld1q_f32_x4(&env->v[ins.hypot2.x].f32x64[16 * k]);
+    float32x4x4_t y = vld1q_f32_x4(&env->v[ins.hypot2.y].f32x64[16 * k]);
+    vst1q_f32_x4(&env->v[ip].f32x64[16 * k], vaddx(vmulx(x, x), vmulx(y, y)));
   }
   return DISPATCH(env, code, tbl, ip + 1);
 }
 
-static size_t op_eval_le_imm(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t op_le_imm(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
   float32x4x4_t t = vdupx_n(ins.le_imm.t);
   uint8x16x4_t r;
   for (size_t k = 0; k < 4; k ++) {
-    r.val[k] = vclex(vld1q_f32_x4(&env->v[ins.le_imm.x][16 * k]), t);
+    r.val[k] = vclex(vld1q_f32_x4(&env->v[ins.le_imm.x].f32x64[16 * k]), t);
   }
-  vst1q_u8_x4((uint8_t *) env->v[ip], r);
+  vst1q_u8_x4(env->v[ip].u8x64, r);
   return DISPATCH(env, code, tbl, ip + 1);
 }
 
-static size_t op_eval_ge_imm(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
+static size_t op_ge_imm(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
   uint8x16x4_t r;
   float32x4x4_t t = vdupx_n(ins.ge_imm.t);
   for (size_t k = 0; k < 4; k ++) {
-    r.val[k] = vclex(t, vld1q_f32_x4(&env->v[ins.ge_imm.x][16 * k]));
+    r.val[k] = vclex(t, vld1q_f32_x4(&env->v[ins.ge_imm.x].f32x64[16 * k]));
   }
-  vst1q_u8_x4((uint8_t *) env->v[ip], r);
+  vst1q_u8_x4(env->v[ip].u8x64, r);
   return DISPATCH(env, code, tbl, ip + 1);
 }
 
-static size_t op_eval_and(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
-  uint8x16x4_t x = vld1q_u8_x4((uint8_t *) env->v[ins.and.x]);
-  uint8x16x4_t y = vld1q_u8_x4((uint8_t *) env->v[ins.and.y]);
-  vst1q_u8_x4((uint8_t *) env->v[ip], vandx(x, y));
+static size_t op_and(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
+  uint8x16x4_t x = vld1q_u8_x4(env->v[ins.and.x].u8x64);
+  uint8x16x4_t y = vld1q_u8_x4(env->v[ins.and.y].u8x64);
+  vst1q_u8_x4(env->v[ip].u8x64, vandx(x, y));
   return DISPATCH(env, code, tbl, ip + 1);
 }
 
-static size_t op_eval_or(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
-  uint8x16x4_t x = vld1q_u8_x4((uint8_t *) env->v[ins.or.x]);
-  uint8x16x4_t y = vld1q_u8_x4((uint8_t *) env->v[ins.or.y]);
-  vst1q_u8_x4((uint8_t *) env->v[ip], vorrx(x, y));
+static size_t op_or(Env * env, Ins * code, struct Tbl * tbl, size_t ip, Ins ins) {
+  uint8x16x4_t x = vld1q_u8_x4(env->v[ins.or.x].u8x64);
+  uint8x16x4_t y = vld1q_u8_x4(env->v[ins.or.y].u8x64);
+  vst1q_u8_x4(env->v[ip].u8x64, vorrx(x, y));
   return DISPATCH(env, code, tbl, ip + 1);
 }
 
-static size_t op_eval_result(Env *, Ins *, struct Tbl *, size_t, Ins ins) {
+static size_t op_result(Env *, Ins *, struct Tbl *, size_t, Ins ins) {
   return ins.result.x;
 }
 
 static struct Tbl TBL = {{
-  op_eval_affine,
-  op_eval_hypot2,
-  op_eval_le_imm,
-  op_eval_ge_imm,
-  op_eval_and,
-  op_eval_or,
-  op_eval_result
+  op_affine,
+  op_hypot2,
+  op_le_imm,
+  op_ge_imm,
+  op_and,
+  op_or,
+  op_result
 }};
 
 void render(Env env[NUM_THREADS], Ins * code, uint8_t image[RESOLUTION][RESOLUTION]) {
@@ -187,7 +187,7 @@ void render(Env env[NUM_THREADS], Ins * code, uint8_t image[RESOLUTION][RESOLUTI
           size_t result = DISPATCH(e, code, &TBL, 0);
           for (size_t k = 0; k < 4; k ++) {
             uint8_t * p5 = p4 + RESOLUTION * k;
-            memcpy(p5, &e->v[result][4 * k], 16);
+            memcpy(p5, &e->v[result].u8x64[4 * k], 16);
           }
         }
       }

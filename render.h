@@ -26,7 +26,7 @@ typedef struct {
 } Ins;
 
 typedef struct {
-  float v[PROGRAM_MAX_LEN][64];
+  union { float f32x64[64]; uint8_t u8x64[64]; } v[PROGRAM_MAX_LEN];
   float x[16];
   float y[4];
 } __attribute__((aligned(64))) Env;
