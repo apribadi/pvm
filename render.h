@@ -27,16 +27,16 @@ typedef struct {
 typedef struct {
   float x[16];
   float y[4];
-} ev_X;
+} ra_X;
 
 typedef union {
   float f32x64[64];
   uint8_t u8x64[64];
-} ev_V;
+} ra_V;
 
 void render(
     size_t num_threads,
-    ev_V env[num_threads][PROGRAM_MAX_LEN],
+    ra_V env[num_threads][PROGRAM_MAX_LEN],
     Inst *,
     uint8_t image[RESOLUTION][RESOLUTION]
   );

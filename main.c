@@ -11,18 +11,19 @@
 
 static uint8_t IMAGE[RESOLUTION][RESOLUTION];
 
-static ev_V ENV[NUM_THREADS][PROGRAM_MAX_LEN];
+static ra_V ENV[NUM_THREADS][PROGRAM_MAX_LEN];
 
-int main(int argc, char ** argv) {
-  (void) argc;
-  (void) argv;
-
+int main(int, char **) {
   uint64_t start = clock_gettime_nsec_np(CLOCK_REALTIME); // which clock ???
-  for (size_t i = 0; i < ITERATION_COUNT; i ++) render(NUM_THREADS, ENV, PROSPERO, IMAGE);
-  uint64_t stop = clock_gettime_nsec_np(CLOCK_REALTIME);
-  double elapsed_ms = ((double) stop - (double) start) / 1000000.0;
 
-  printf("rendered in %f ms / frame ...\n", elapsed_ms / ITERATION_COUNT);
+  for (size_t i = 0; i < ITERATION_COUNT; i ++) {
+    render(NUM_THREADS, ENV, PROSPERO, IMAGE);
+  }
+
+  uint64_t stop = clock_gettime_nsec_np(CLOCK_REALTIME);
+  double ms_per_frame = (double) (stop - start) / 1000000.0 / ITERATION_COUNT;
+
+  printf("rendered in %f ms / frame ...\n", ms_per_frame);
 
   FILE * file = fopen("prospero.pgm", "w");
   if (! file) return 1;
