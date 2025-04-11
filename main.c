@@ -11,13 +11,13 @@
 
 static uint8_t IMAGE[RESOLUTION][RESOLUTION];
 
-static ra_V ENV[NUM_THREADS][PROGRAM_MAX_LEN];
+static ra_R REGS[NUM_THREADS][PROGRAM_MAX_LEN];
 
 int main(int, char **) {
   uint64_t start = clock_gettime_nsec_np(CLOCK_REALTIME); // which clock ???
 
   for (size_t i = 0; i < ITERATION_COUNT; i ++) {
-    render(NUM_THREADS, ENV, PROSPERO, IMAGE);
+    render(NUM_THREADS, REGS, PROSPERO, IMAGE);
   }
 
   uint64_t stop = clock_gettime_nsec_np(CLOCK_REALTIME);
