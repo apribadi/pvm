@@ -11,7 +11,7 @@
 
 static uint8_t IMAGE[RESOLUTION][RESOLUTION];
 
-static Env ENV[NUM_THREADS];
+static ev_V ENV[NUM_THREADS][PROGRAM_MAX_LEN];
 
 int main(int argc, char ** argv) {
   (void) argc;

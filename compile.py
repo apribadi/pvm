@@ -198,50 +198,25 @@ for i, ins in enumerate(code):
 
 code = out
 
-print(f"static Ins PROSPERO[{len(code)}] = {{")
+print(f"static Inst PROSPERO[{len(code)}] = {{")
 
 for i, ins in enumerate(code):
     match ins:
         case "affine", a, b, c:
-            print(f"  [{i}] = {{ AFFINE, .affine = {{ {a:.9}f, {b:.9}f, {c:.9}f }} }},")
+            print(f"  [{i}] = {{ TAG_AFFINE, .affine = {{ {a:.9}f, {b:.9}f, {c:.9}f }} }},")
         case "hypot2", x, y:
-            print(f"  [{i}] = {{ HYPOT2, .hypot2 = {{ {x}, {y} }} }},")
+            print(f"  [{i}] = {{ TAG_HYPOT2, .hypot2 = {{ {x}, {y} }} }},")
         case "le_imm", x, t:
-            print(f"  [{i}] = {{ LE_IMM, .le_imm = {{ {x}, {t:.9}f }} }},")
+            print(f"  [{i}] = {{ TAG_LE_IMM, .le_imm = {{ {x}, {t:.9}f }} }},")
         case "ge_imm", x, t:
-            print(f"  [{i}] = {{ GE_IMM, .ge_imm = {{ {x}, {t:.9}f }} }},")
+            print(f"  [{i}] = {{ TAG_GE_IMM, .ge_imm = {{ {x}, {t:.9}f }} }},")
         case "and", x, y:
-            print(f"  [{i}] = {{ AND, .and = {{ {x}, {y} }} }},")
+            print(f"  [{i}] = {{ TAG_AND, .and = {{ {x}, {y} }} }},")
         case "or", x, y:
-            print(f"  [{i}] = {{ OR, .or = {{ {x}, {y} }} }},")
+            print(f"  [{i}] = {{ TAG_OR, .or = {{ {x}, {y} }} }},")
         case "result", x:
-            print(f"  [{i}] = {{ RESULT, .result = {{ {x} }} }}")
+            print(f"  [{i}] = {{ TAG_RESULT, .result = {{ {x} }} }}")
         case _:
             raise RuntimeError(f"can't lower instruction: {ins}")
 
 print(f"}};")
-
-'''
-for i, ins in enumerate(code):
-    match ins:
-        case "affine", a, b, c:
-            print(f"  [{i}] = {{ AFFINE, .affine = {{ {a:.9}f, {b:.9}f, {c:.9}f }} }},")
-        case "hypot2", x, y:
-            print(f"  [{i}] = {{ HYPOT2, .hypot2 = {{ {code[x]}, {code[y]} }} }},")
-        case "le_imm", x, t:
-            print(f"  [{i}] = {{ LE_IMM, .le_imm = {{ {code[x]}, {t:.9}f }} }},")
-        case "ge_imm", x, t:
-            print(f"  [{i}] = {{ GE_IMM, .ge_imm = {{ {code[x]}, {t:.9}f }} }},")
-        case "and", x, y:
-            print(f"  [{i}] = {{ AND, .and = {{ {code[x]}, {code[y]} }} }},")
-        case "and3", x, y, z:
-            print(f"  [{i}] = {{ AND3, .and3 = {{ {code[x]}, {code[y]}, {code[z]} }} }},")
-        case "or", x, y:
-            print(f"  [{i}] = {{ OR, .or = {{ {code[x]}, {code[y]} }} }},")
-        case "or3", x, y, z:
-            print(f"  [{i}] = {{ OR3, .or3 = {{ {code[x]}, {code[y]}, {code[z]} }} }},")
-        case "result", x:
-            print(f"  [{i}] = {{ RESULT, .result = {{ {code[x]} }} }}")
-        case _:
-            raise RuntimeError(f"can't lower instruction: {ins}")
-'''
