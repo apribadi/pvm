@@ -71,6 +71,16 @@ static inline uint8x16x4_t vorrx(uint8x16x4_t x, uint8x16x4_t y) {
 
 // -------- RASTERIZE --------
 
+typedef struct {
+  float x[16];
+  float y[4];
+} ra_X;
+
+typedef union {
+  float f32x64[64];
+  uint8_t u8x64[64];
+} ra_R;
+
 struct ra_Tbl { size_t (*ops[7])(Inst *, ra_X *, ra_R *, struct ra_Tbl *, size_t, Inst); };
 
 static inline size_t ra_dispatch(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, size_t ip) {
@@ -153,27 +163,28 @@ static size_t rasterize(Inst * cp, ra_X * xp, ra_R * rp) {
 // -------- RENDER FUNCTION --------
 
 void render(
-    size_t num_threads,
-    ra_R regs[num_threads][PROGRAM_MAX_LEN],
+    size_t num_insts,
     Inst * code,
-    uint8_t image[RESOLUTION][RESOLUTION]
+    uint8_t image[RES][RES]
   )
 {
   float side = 2.0f;
-  float step = side / RESOLUTION;
+  float step = side / RES;
   float xmin0 = -1.0f;
   float ymax0 = 1.0f;
   uint8_t * p0 = &image[0][0];
 
-#pragma omp parallel for num_threads(num_threads)
+#pragma omp parallel for
   for (size_t t1 = 0; t1 < 16; t1 ++) {
-    ra_R * rp = regs[omp_get_thread_num()];
+    ra_R * rp = malloc(sizeof(ra_R) * num_insts);
+    if (! rp) abort();
+
     ra_X * xp = &(ra_X) {};
     size_t i1 = t1 & 3;
     size_t j1 = t1 >> 2;
     float xmin1 = xmin0 + side / 4.0f * (float) i1;
     float ymax1 = ymax0 - side / 4.0f * (float) j1;
-    uint8_t * p1 = p0 + RESOLUTION / 4 * i1 + RESOLUTION / 4 * RESOLUTION * j1;
+    uint8_t * p1 = p0 + RES / 4 * i1 + RES / 4 * RES * j1;
 
     // TODO: specialize here
 
@@ -181,28 +192,29 @@ void render(
     for (size_t i2 = 0; i2 < 4; i2 ++) {
       float xmin2 = xmin1 + side / 16.0f * (float) i2;
       float ymax2 = ymax1 - side / 16.0f * (float) j2;
-      uint8_t * p2 = p1 + RESOLUTION / 16 * i2 + RESOLUTION / 16 * RESOLUTION * j2;
+      uint8_t * p2 = p1 + RES / 16 * i2 + RES / 16 * RES * j2;
       for (size_t j3 = 0; j3 < 4; j3 ++)
       for (size_t i3 = 0; i3 < 4; i3 ++) {
         float xmin3 = xmin2 + side / 64.0f * (float) i3;
         float ymax3 = ymax2 - side / 64.0f * (float) j3;
-        uint8_t * p3 = p2 + RESOLUTION / 64 * i3 + RESOLUTION / 64 * RESOLUTION * j3;
+        uint8_t * p3 = p2 + RES / 64 * i3 + RES / 64 * RES * j3;
         for (size_t k = 0; k < 16; k ++) {
           xp->x[k] = xmin3 + step / 2.0f + step * (float) k;
         }
         for (size_t t4 = 0; t4 < 4; t4 ++) {
           float ymax4 = ymax3 - side / 256.0f * (float) t4;
-          uint8_t * p4 = p3 + RESOLUTION / 256 * RESOLUTION * t4;
+          uint8_t * p4 = p3 + RES / 256 * RES * t4;
           for (size_t k = 0; k < 4; k ++) {
             xp->y[k] = ymax4 - step / 2.0f - step * (float) k;
           }
           size_t result = rasterize(code, xp, rp);
           for (size_t k = 0; k < 4; k ++) {
-            uint8_t * p5 = p4 + RESOLUTION * k;
+            uint8_t * p5 = p4 + RES * k;
             memcpy(p5, &rp[result].u8x64[16 * k], 16);
           }
         }
       }
     }
+    free(rp);
   }
 }
