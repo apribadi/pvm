@@ -1,6 +1,6 @@
 #define RES 1024
 
-typedef enum : uint8_t {
+typedef enum : uint32_t {
   OP_AFFINE,
   OP_HYPOT2,
   OP_LE_IMM,
