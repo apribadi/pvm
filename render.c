@@ -5,36 +5,11 @@
 #include <omp.h>
 #include <arm_neon.h>
 
+#include <stdio.h>
+#include "simd.h"
 #include "render.h"
 
 // -------- UTILITY FUNCTIONS --------
-
-static inline float32x4x4_t vmulx(float32x4x4_t x, float32x4x4_t y) {
-  return (float32x4x4_t) {{
-    vmulq_f32(x.val[0], y.val[0]),
-    vmulq_f32(x.val[1], y.val[1]),
-    vmulq_f32(x.val[2], y.val[2]),
-    vmulq_f32(x.val[3], y.val[3])
-  }};
-}
-
-static inline float32x4x4_t vmulx_n(float32x4x4_t x, float y) {
-  return (float32x4x4_t) {{
-    vmulq_n_f32(x.val[0], y),
-    vmulq_n_f32(x.val[1], y),
-    vmulq_n_f32(x.val[2], y),
-    vmulq_n_f32(x.val[3], y)
-  }};
-}
-
-static inline float32x4x4_t vaddx(float32x4x4_t x, float32x4x4_t y) {
-  return (float32x4x4_t) {{
-    vaddq_f32(x.val[0], y.val[0]),
-    vaddq_f32(x.val[1], y.val[1]),
-    vaddq_f32(x.val[2], y.val[2]),
-    vaddq_f32(x.val[3], y.val[3])
-  }};
-}
 
 static inline float32x4x4_t vdupx_n(float x) {
   float32x4_t y = vdupq_n_f32(x);
@@ -111,6 +86,13 @@ static size_t sp_affine(Inst * cp, sp_X * xp, sp_R * rp, struct sp_Tbl * tp, siz
   }
   vst1q_f32_x4(rp[ip].interval.min, wmin);
   vst1q_f32_x4(rp[ip].interval.max, wmax);
+  /*
+  printf("ip = %d\n", (int) ip);
+  for (size_t k = 0; k < 4; k ++) {
+    printf("min = %f\n", (double) wmin.val[0][k]);
+    printf("max = %f\n", (double) wmax.val[0][k]);
+  }
+  */
   return sp_dispatch(cp, xp, rp, tp, ip + 1);
 }
 
@@ -174,10 +156,10 @@ static inline size_t ra_dispatch(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl 
 static size_t ra_affine(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, size_t ip, Inst inst) {
   float32x4x4_t x = vld1q_f32_x4(xp->x);
   float32x4_t y = vld1q_f32(xp->y);
-  float32x4x4_t u = vaddx(vmulx_n(x, inst.affine.a), vdupx_n(inst.affine.c));
+  float32x4x4_t u = vx_fadd_32(vx_fmul_n_32(x, inst.affine.a), vdupx_n(inst.affine.c));
   float32x4_t v = vmulq_n_f32(y, inst.affine.b);
   for (size_t k = 0; k < 4; k ++) {
-    vst1q_f32_x4(&rp[ip].f32x64[16 * k],  vaddx(u, vdupx_n(v[k])));
+    vst1q_f32_x4(&rp[ip].f32x64[16 * k],  vx_fadd_32(u, vdupx_n(v[k])));
   }
   return ra_dispatch(cp, xp, rp, tp, ip + 1);
 }
@@ -186,7 +168,7 @@ static size_t ra_hypot2(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, siz
   for (size_t k = 0; k < 4; k ++) {
     float32x4x4_t x = vld1q_f32_x4(&rp[inst.hypot2.x].f32x64[16 * k]);
     float32x4x4_t y = vld1q_f32_x4(&rp[inst.hypot2.y].f32x64[16 * k]);
-    vst1q_f32_x4(&rp[ip].f32x64[16 * k], vaddx(vmulx(x, x), vmulx(y, y)));
+    vst1q_f32_x4(&rp[ip].f32x64[16 * k], vx_fadd_32(vx_fmul_32(x, x), vx_fmul_32(y, y)));
   }
   return ra_dispatch(cp, xp, rp, tp, ip + 1);
 }
@@ -265,6 +247,12 @@ void render(size_t num_insts, Inst code[num_insts], uint8_t image[RES][RES]) {
       sp_X * xp = &(sp_X) {};
       sp_R * rp = malloc(sizeof(sp_R) * num_insts);
       if (! rp) abort();
+
+      for (size_t k = 0; k < 5; k ++) {
+        xp->x[k] = xmin1 + side / 16.0f * (float) k;
+        xp->y[k] = ymax1 - side / 16.0f * (float) k;
+      }
+
       specialize(code, xp, rp);
     }
 

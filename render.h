@@ -1,3 +1,5 @@
+#pragma once
+
 #define RES 1024
 
 typedef enum : uint32_t {
