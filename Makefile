@@ -23,7 +23,7 @@ CFLAGS = \
 go: main.c render.h render.o prospero.c
 	$(CC) -o $@ $< render.o $(CFLAGS) -lomp -L/opt/homebrew/opt/libomp/lib
 
-render.o: render.c render.h
+render.o: render.c render.h simd.h
 	$(CC) -c -o $@ $< $(CFLAGS) -Xclang -fopenmp -I/opt/homebrew/opt/libomp/include
 
 prospero.c: compile.py prospero.vm
