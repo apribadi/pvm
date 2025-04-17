@@ -11,11 +11,6 @@
 
 // -------- UTILITY FUNCTIONS --------
 
-static inline float32x4x4_t vdupx_n(float x) {
-  float32x4_t y = vdupq_n_f32(x);
-  return (float32x4x4_t) {{ y, y, y, y }};
-}
-
 static inline uint8x16_t vclex(float32x4x4_t x, float32x4x4_t y) {
   float32x4_t z0 = vcleq_f32(x.val[0], y.val[0]);
   float32x4_t z1 = vcleq_f32(x.val[1], y.val[1]);
@@ -84,8 +79,8 @@ static size_t sp_affine(Inst * cp, sp_X * xp, sp_R * rp, struct sp_Tbl * tp, siz
     wmin.val[k] = vaddq_f32(umin, vdupq_n_f32(vmin[k]));
     wmax.val[k] = vaddq_f32(umax, vdupq_n_f32(vmax[k]));
   }
-  vst1q_f32_x4(rp[ip].interval.min, wmin);
-  vst1q_f32_x4(rp[ip].interval.max, wmax);
+  vx_store_f32(rp[ip].interval.min, wmin);
+  vx_store_f32(rp[ip].interval.max, wmax);
   /*
   printf("ip = %d\n", (int) ip);
   for (size_t k = 0; k < 4; k ++) {
@@ -154,30 +149,30 @@ static inline size_t ra_dispatch(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl 
 }
 
 static size_t ra_affine(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, size_t ip, Inst inst) {
-  float32x4x4_t x = vld1q_f32_x4(xp->x);
+  float32x4x4_t x = vx_load_f32(xp->x);
   float32x4_t y = vld1q_f32(xp->y);
-  float32x4x4_t u = vx_fadd_32(vx_fmul_n_32(x, inst.affine.a), vdupx_n(inst.affine.c));
+  float32x4x4_t u = vx_add_n_f32(vx_mul_n_f32(x, inst.affine.a), inst.affine.c);
   float32x4_t v = vmulq_n_f32(y, inst.affine.b);
   for (size_t k = 0; k < 4; k ++) {
-    vst1q_f32_x4(&rp[ip].f32x64[16 * k],  vx_fadd_32(u, vdupx_n(v[k])));
+    vx_store_f32(&rp[ip].f32x64[16 * k],  vx_add_n_f32(u, v[k]));
   }
   return ra_dispatch(cp, xp, rp, tp, ip + 1);
 }
 
 static size_t ra_hypot2(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, size_t ip, Inst inst) {
   for (size_t k = 0; k < 4; k ++) {
-    float32x4x4_t x = vld1q_f32_x4(&rp[inst.hypot2.x].f32x64[16 * k]);
-    float32x4x4_t y = vld1q_f32_x4(&rp[inst.hypot2.y].f32x64[16 * k]);
-    vst1q_f32_x4(&rp[ip].f32x64[16 * k], vx_fadd_32(vx_fmul_32(x, x), vx_fmul_32(y, y)));
+    float32x4x4_t x = vx_load_f32(&rp[inst.hypot2.x].f32x64[16 * k]);
+    float32x4x4_t y = vx_load_f32(&rp[inst.hypot2.y].f32x64[16 * k]);
+    vx_store_f32(&rp[ip].f32x64[16 * k], vx_add_f32(vx_mul_f32(x, x), vx_mul_f32(y, y)));
   }
   return ra_dispatch(cp, xp, rp, tp, ip + 1);
 }
 
 static size_t ra_le_imm(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, size_t ip, Inst inst) {
-  float32x4x4_t t = vdupx_n(inst.le_imm.t);
+  float32x4x4_t t = vx_dup_f32(inst.le_imm.t);
   uint8x16x4_t r;
   for (size_t k = 0; k < 4; k ++) {
-    r.val[k] = vclex(vld1q_f32_x4(&rp[inst.le_imm.x].f32x64[16 * k]), t);
+    r.val[k] = vclex(vx_load_f32(&rp[inst.le_imm.x].f32x64[16 * k]), t);
   }
   vst1q_u8_x4(rp[ip].u8x64, r);
   return ra_dispatch(cp, xp, rp, tp, ip + 1);
@@ -185,25 +180,25 @@ static size_t ra_le_imm(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, siz
 
 static size_t ra_ge_imm(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, size_t ip, Inst inst) {
   uint8x16x4_t r;
-  float32x4x4_t t = vdupx_n(inst.ge_imm.t);
+  float32x4x4_t t = vx_dup_f32(inst.ge_imm.t);
   for (size_t k = 0; k < 4; k ++) {
-    r.val[k] = vclex(t, vld1q_f32_x4(&rp[inst.ge_imm.x].f32x64[16 * k]));
+    r.val[k] = vclex(t, vx_load_f32(&rp[inst.ge_imm.x].f32x64[16 * k]));
   }
   vst1q_u8_x4(rp[ip].u8x64, r);
   return ra_dispatch(cp, xp, rp, tp, ip + 1);
 }
 
 static size_t ra_and(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, size_t ip, Inst inst) {
-  uint8x16x4_t x = vld1q_u8_x4(rp[inst.and.x].u8x64);
-  uint8x16x4_t y = vld1q_u8_x4(rp[inst.and.y].u8x64);
-  vst1q_u8_x4(rp[ip].u8x64, vandx(x, y));
+  v512 x = vx_load_u8(rp[inst.and.x].u8x64);
+  v512 y = vx_load_u8(rp[inst.and.y].u8x64);
+  vx_store_u8(rp[ip].u8x64, vx_and(x, y));
   return ra_dispatch(cp, xp, rp, tp, ip + 1);
 }
 
 static size_t ra_or(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, size_t ip, Inst inst) {
-  uint8x16x4_t x = vld1q_u8_x4(rp[inst.or.x].u8x64);
-  uint8x16x4_t y = vld1q_u8_x4(rp[inst.or.y].u8x64);
-  vst1q_u8_x4(rp[ip].u8x64, vorrx(x, y));
+  v512 x = vx_load_u8(rp[inst.or.x].u8x64);
+  v512 y = vx_load_u8(rp[inst.or.y].u8x64);
+  vx_store_u8(rp[ip].u8x64, vx_or(x, y));
   return ra_dispatch(cp, xp, rp, tp, ip + 1);
 }
 
