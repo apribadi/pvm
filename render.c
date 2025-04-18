@@ -35,19 +35,19 @@ static size_t sp_affine(Inst * cp, sp_X * xp, sp_R * rp, struct sp_Tbl * tp, siz
   float32x4_t xmax = v128_load_f32(&xp->x[1]);
   float32x4_t ymin = v128_load_f32(&xp->y[1]);
   float32x4_t ymax = v128_load_f32(&xp->y[0]);
-  float32x4_t u0 = vmulq_n_f32(xmin, inst.affine.a);
-  float32x4_t u1 = vmulq_n_f32(xmax, inst.affine.a);
-  float32x4_t v0 = vmulq_n_f32(ymin, inst.affine.b);
-  float32x4_t v1 = vmulq_n_f32(ymax, inst.affine.b);
+  float32x4_t u0 = v128_mul_n_f32(xmin, inst.affine.a);
+  float32x4_t u1 = v128_mul_n_f32(xmax, inst.affine.a);
+  float32x4_t v0 = v128_mul_n_f32(ymin, inst.affine.b);
+  float32x4_t v1 = v128_mul_n_f32(ymax, inst.affine.b);
   float32x4_t umin = vminnmq_f32(u0, u1);
   float32x4_t umax = vmaxnmq_f32(u0, u1);
-  float32x4_t vmin = vaddq_f32(vminnmq_f32(v0, v1), vdupq_n_f32(inst.affine.c));
-  float32x4_t vmax = vaddq_f32(vmaxnmq_f32(v0, v1), vdupq_n_f32(inst.affine.c));
+  float32x4_t vmin = v128_add_n_f32(vminnmq_f32(v0, v1), inst.affine.c);
+  float32x4_t vmax = v128_add_n_f32(vmaxnmq_f32(v0, v1), inst.affine.c);
   float32x4x4_t wmin;
   float32x4x4_t wmax;
   for (size_t k = 0; k < 4; k ++) {
-    wmin.val[k] = vaddq_f32(umin, vdupq_n_f32(vmin[k]));
-    wmax.val[k] = vaddq_f32(umax, vdupq_n_f32(vmax[k]));
+    wmin.val[k] = v128_add_n_f32(umin, v128_get_f32(vmin, k));
+    wmax.val[k] = v128_add_n_f32(umax, v128_get_f32(vmax, k));
   }
   v512_store_f32(rp[ip].interval.min, wmin);
   v512_store_f32(rp[ip].interval.max, wmax);

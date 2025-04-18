@@ -16,15 +16,19 @@ static inline void v128_store_f32(float p[4], v128 x) {
   return vst1q_f32(p, x);
 }
 
-static inline v128 v128_mul_n_f32(v128 x, float y) {
-  return vmulq_n_f32(x, y);
-}
-
 static inline float v128_get_f32(v128 x, size_t i) {
   return x[i];
 }
 
-static inline v128 v256narrow_i8_i16(v256 x) {
+static inline v128 v128_add_n_f32(v128 x, float y) {
+  return vaddq_f32(x, vdupq_n_f32(y));
+}
+
+static inline v128 v128_mul_n_f32(v128 x, float y) {
+  return vmulq_n_f32(x, y);
+}
+
+static inline v128 v256_narrow_i8_i16(v256 x) {
   return vreinterpretq_f32_u8(vuzp1q_u8(vreinterpretq_u8_f32(x.val[0]), vreinterpretq_u8_f32(x.val[1])));
 }
 
@@ -77,7 +81,7 @@ static inline v256 v512_narrow_i16_i32(v512 x) {
 }
 
 static inline v128 v512_narrow_i8_i32(v512 x) {
-  return v256narrow_i8_i16(v512_narrow_i16_i32(x));
+  return v256_narrow_i8_i16(v512_narrow_i16_i32(x));
 }
 
 static inline v512 v512_and(v512 x, v512 y) {
