@@ -24,7 +24,7 @@ static inline float v128_get_f32(v128 x, size_t i) {
   return x[i];
 }
 
-static inline v128 v256truncate_i8_i16(v256 x) {
+static inline v128 v256narrow_i8_i16(v256 x) {
   return vreinterpretq_f32_u8(vuzp1q_u8(vreinterpretq_u8_f32(x.val[0]), vreinterpretq_u8_f32(x.val[1])));
 }
 
@@ -47,13 +47,13 @@ static inline v512 v512_load_u8(uint8_t p[64]) {
 }
 
 static inline void v512_store_u8(uint8_t p[64], v512 x) {
-  uint8x16x4_t x = {{
+  uint8x16x4_t y = {{
     vreinterpretq_u8_f32(x.val[0]),
     vreinterpretq_u8_f32(x.val[1]),
     vreinterpretq_u8_f32(x.val[2]),
     vreinterpretq_u8_f32(x.val[3])
   }};
-  vst1q_u8_x4(p, x);
+  vst1q_u8_x4(p, y);
 }
 
 static inline v512 v512_from_v128x4(v128 x[4]) {
@@ -69,15 +69,15 @@ static inline v512 v512_dup_f32(float x) {
   }};
 }
 
-static inline v256 v512_truncate_i16_i32(v512 x) {
+static inline v256 v512_narrow_i16_i32(v512 x) {
   return (float32x4x2_t) {{
     vreinterpretq_f32_u16(vuzp1q_u16(vreinterpretq_u16_f32(x.val[0]), vreinterpretq_u16_f32(x.val[1]))),
     vreinterpretq_f32_u16(vuzp1q_u16(vreinterpretq_u16_f32(x.val[2]), vreinterpretq_u16_f32(x.val[3])))
   }};
 }
 
-static inline v128 v512_truncate_i8_i32(v512 x) {
-  return v256truncate_i8_i16(v512_truncate_i16_i32(x));
+static inline v128 v512_narrow_i8_i32(v512 x) {
+  return v256narrow_i8_i16(v512_narrow_i16_i32(x));
 }
 
 static inline v512 v512_and(v512 x, v512 y) {

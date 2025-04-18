@@ -31,10 +31,10 @@ static inline size_t sp_dispatch(Inst * cp, sp_X * xp, sp_R * rp, struct sp_Tbl 
 }
 
 static size_t sp_affine(Inst * cp, sp_X * xp, sp_R * rp, struct sp_Tbl * tp, size_t ip, Inst inst) {
-  float32x4_t xmin = vld1q_f32(&xp->x[0]);
-  float32x4_t xmax = vld1q_f32(&xp->x[1]);
-  float32x4_t ymin = vld1q_f32(&xp->y[1]);
-  float32x4_t ymax = vld1q_f32(&xp->y[0]);
+  float32x4_t xmin = v128_load_f32(&xp->x[0]);
+  float32x4_t xmax = v128_load_f32(&xp->x[1]);
+  float32x4_t ymin = v128_load_f32(&xp->y[1]);
+  float32x4_t ymax = v128_load_f32(&xp->y[0]);
   float32x4_t u0 = vmulq_n_f32(xmin, inst.affine.a);
   float32x4_t u1 = vmulq_n_f32(xmax, inst.affine.a);
   float32x4_t v0 = vmulq_n_f32(ymin, inst.affine.b);
