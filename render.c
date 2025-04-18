@@ -49,8 +49,8 @@ static size_t sp_affine(Inst * cp, sp_X * xp, sp_R * rp, struct sp_Tbl * tp, siz
     wmin.val[k] = vaddq_f32(umin, vdupq_n_f32(vmin[k]));
     wmax.val[k] = vaddq_f32(umax, vdupq_n_f32(vmax[k]));
   }
-  vx_store_f32(rp[ip].interval.min, wmin);
-  vx_store_f32(rp[ip].interval.max, wmax);
+  v512_store_f32(rp[ip].interval.min, wmin);
+  v512_store_f32(rp[ip].interval.max, wmax);
   /*
   printf("ip = %d\n", (int) ip);
   for (size_t k = 0; k < 4; k ++) {
@@ -119,56 +119,56 @@ static inline size_t ra_dispatch(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl 
 }
 
 static size_t ra_affine(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, size_t ip, Inst inst) {
-  v512 x = vx_load_f32(xp->x);
-  v128 y = vq_load_f32(xp->y);
-  v512 u = vx_add_n_f32(vx_mul_n_f32(x, inst.affine.a), inst.affine.c);
-  v128 v = vq_mul_n_f32(y, inst.affine.b);
+  v512 x = v512_load_f32(xp->x);
+  v128 y = v128_load_f32(xp->y);
+  v512 u = v512_add_n_f32(v512_mul_n_f32(x, inst.affine.a), inst.affine.c);
+  v128 v = v128_mul_n_f32(y, inst.affine.b);
   for (size_t k = 0; k < 4; k ++) {
-    vx_store_f32(&rp[ip].f32x64[16 * k],  vx_add_n_f32(u, vq_get_f32(v, k)));
+    v512_store_f32(&rp[ip].f32x64[16 * k],  v512_add_n_f32(u, v128_get_f32(v, k)));
   }
   return ra_dispatch(cp, xp, rp, tp, ip + 1);
 }
 
 static size_t ra_hypot2(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, size_t ip, Inst inst) {
   for (size_t k = 0; k < 4; k ++) {
-    v512 x = vx_load_f32(&rp[inst.hypot2.x].f32x64[16 * k]);
-    v512 y = vx_load_f32(&rp[inst.hypot2.y].f32x64[16 * k]);
-    vx_store_f32(&rp[ip].f32x64[16 * k], vx_add_f32(vx_mul_f32(x, x), vx_mul_f32(y, y)));
+    v512 x = v512_load_f32(&rp[inst.hypot2.x].f32x64[16 * k]);
+    v512 y = v512_load_f32(&rp[inst.hypot2.y].f32x64[16 * k]);
+    v512_store_f32(&rp[ip].f32x64[16 * k], v512_add_f32(v512_mul_f32(x, x), v512_mul_f32(y, y)));
   }
   return ra_dispatch(cp, xp, rp, tp, ip + 1);
 }
 
 static size_t ra_le_imm(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, size_t ip, Inst inst) {
-  v512 t = vx_dup_f32(inst.le_imm.t);
-  v512 r;
+  v512 t = v512_dup_f32(inst.le_imm.t);
+  v128 r[4];
   for (size_t k = 0; k < 4; k ++) {
-    vx_set_v128(&r, k, vx_truncate_i8_i32(vx_le_f32(vx_load_f32(&rp[inst.le_imm.x].f32x64[16 * k]), t)));
+    r[k] = v512_narrow_i8_i32(v512_le_f32(v512_load_f32(&rp[inst.le_imm.x].f32x64[16 * k]), t));
   }
-  vx_store_u8(rp[ip].u8x64, r);
+  v512_store_u8(rp[ip].u8x64, v512_from_v128x4(r));
   return ra_dispatch(cp, xp, rp, tp, ip + 1);
 }
 
 static size_t ra_ge_imm(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, size_t ip, Inst inst) {
-  v512 r;
-  v512 t = vx_dup_f32(inst.ge_imm.t);
+  v512 t = v512_dup_f32(inst.ge_imm.t);
+  v128 r[4];
   for (size_t k = 0; k < 4; k ++) {
-    vx_set_v128(&r, k, vx_truncate_i8_i32(vx_le_f32(t, vx_load_f32(&rp[inst.ge_imm.x].f32x64[16 * k]))));
+    r[k] = v512_narrow_i8_i32(v512_le_f32(t, v512_load_f32(&rp[inst.ge_imm.x].f32x64[16 * k])));
   }
-  vx_store_u8(rp[ip].u8x64, r);
+  v512_store_u8(rp[ip].u8x64, v512_from_v128x4(r));
   return ra_dispatch(cp, xp, rp, tp, ip + 1);
 }
 
 static size_t ra_and(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, size_t ip, Inst inst) {
-  v512 x = vx_load_u8(rp[inst.and.x].u8x64);
-  v512 y = vx_load_u8(rp[inst.and.y].u8x64);
-  vx_store_u8(rp[ip].u8x64, vx_and(x, y));
+  v512 x = v512_load_u8(rp[inst.and.x].u8x64);
+  v512 y = v512_load_u8(rp[inst.and.y].u8x64);
+  v512_store_u8(rp[ip].u8x64, v512_and(x, y));
   return ra_dispatch(cp, xp, rp, tp, ip + 1);
 }
 
 static size_t ra_or(Inst * cp, ra_X * xp, ra_R * rp, struct ra_Tbl * tp, size_t ip, Inst inst) {
-  v512 x = vx_load_u8(rp[inst.or.x].u8x64);
-  v512 y = vx_load_u8(rp[inst.or.y].u8x64);
-  vx_store_u8(rp[ip].u8x64, vx_or(x, y));
+  v512 x = v512_load_u8(rp[inst.or.x].u8x64);
+  v512 y = v512_load_u8(rp[inst.or.y].u8x64);
+  v512_store_u8(rp[ip].u8x64, v512_or(x, y));
   return ra_dispatch(cp, xp, rp, tp, ip + 1);
 }
 
