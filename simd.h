@@ -28,6 +28,14 @@ static inline v128 v128_mul_n_f32(v128 x, float y) {
   return vmulq_n_f32(x, y);
 }
 
+static inline v128 v128_min_f32(v128 x, v128 y) {
+  return vminq_f32(x, y);
+}
+
+static inline v128 v128_max_f32(v128 x, v128 y) {
+  return vmaxq_f32(x, y);
+}
+
 static inline v128 v256_narrow_i8_i16(v256 x) {
   return vreinterpretq_f32_u8(vuzp1q_u8(vreinterpretq_u8_f32(x.val[0]), vreinterpretq_u8_f32(x.val[1])));
 }
