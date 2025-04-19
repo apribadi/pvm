@@ -1,7 +1,5 @@
 #pragma once
 
-#define RES 1024
-
 typedef enum : uint32_t {
   OP_AFFINE,
   OP_HYPOT2,
@@ -25,4 +23,9 @@ typedef struct {
   };
 } Inst;
 
-void render(size_t num_insts, Inst code[num_insts], uint8_t image[RES][RES]);
+void render(
+    size_t num_insts,
+    Inst code[num_insts],
+    size_t resolution,
+    uint8_t image[resolution][resolution]
+  );

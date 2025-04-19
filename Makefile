@@ -18,7 +18,7 @@ CFLAGS = \
 	-fno-omit-frame-pointer \
 	-fno-slp-vectorize
 
-  #-fsanitize=undefined \
+#  -fsanitize=undefined \
 
 go: main.c render.h render.o prospero.c
 	$(CC) -o $@ $< render.o $(CFLAGS) -lomp -L/opt/homebrew/opt/libomp/lib

@@ -7,14 +7,18 @@
 #include "prospero.c"
 
 #define ITERATION_COUNT 5
+#define RESOLUTION 1024
 
-static uint8_t IMAGE[RES][RES];
+static uint8_t IMAGE[RESOLUTION][RESOLUTION];
 
 int main(int, char **) {
+  // warmup
+  render(sizeof(PROSPERO) / sizeof(Inst), PROSPERO, RESOLUTION, IMAGE);
+
   uint64_t start = clock_gettime_nsec_np(CLOCK_REALTIME); // which clock ???
 
   for (size_t i = 0; i < ITERATION_COUNT; i ++) {
-    render(sizeof(PROSPERO) / sizeof(Inst), PROSPERO, IMAGE);
+    render(sizeof(PROSPERO) / sizeof(Inst), PROSPERO, RESOLUTION, IMAGE);
   }
 
   uint64_t stop = clock_gettime_nsec_np(CLOCK_REALTIME);
@@ -27,8 +31,8 @@ int main(int, char **) {
 
   // we don't check fprintf's return values ...
   fprintf(file, "P5\n");
-  fprintf(file, "%d\n", RES);
-  fprintf(file, "%d\n", RES);
+  fprintf(file, "%d\n", RESOLUTION);
+  fprintf(file, "%d\n", RESOLUTION);
   fprintf(file, "255\n");
 
   if (fwrite(IMAGE, sizeof(IMAGE), 1, file) != 1) return 1;

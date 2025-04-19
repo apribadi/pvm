@@ -5,6 +5,7 @@
 #include <omp.h>
 #include <arm_neon.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include "simd.h"
 #include "render.h"
@@ -186,74 +187,102 @@ static struct ra_Tbl ra_TBL = {{
   ra_result
 }};
 
-static size_t rasterize(Inst * cp, ra_X * xp, ra_R * rp) {
-  return ra_dispatch(cp, xp, rp, &ra_TBL, 0);
+static void rasterize(Inst * cp, ra_X * xp, ra_R * rp, uint8_t * tile, size_t stride) {
+  size_t result = ra_dispatch(cp, xp, rp, &ra_TBL, 0);
+  for (size_t k = 0; k < 4; k ++) {
+    memcpy(tile + stride * k, &rp[result].u8x64[16 * k], 16);
+  }
 }
 
-// -------- RENDER FUNCTION --------
+// -------- RENDER --------
 
-void render(size_t num_insts, Inst code[num_insts], uint8_t image[RES][RES]) {
+void render_tile(
+    size_t num_insts,
+    Inst code[num_insts],
+    float xmin,
+    float ymax,
+    float side,
+    size_t resolution,
+    size_t stride,
+    uint8_t * tile
+  )
+{
+  if (resolution == 64) {
+    ra_X * xp = &(ra_X) {};
+    ra_R * rp = malloc(sizeof(ra_R) * num_insts);
+    if (! rp) abort();
+
+    float step = side / (float) resolution;
+    float half = 0.5f * step;
+
+    for (size_t j = 0; j < 64; j += 4) {
+      float y = ymax - half - step * (float) j;
+      for (size_t k = 0; k < 4; k ++) {
+        xp->y[k] = y - step * (float) k;
+      }
+      for (size_t i = 0; i < 64; i += 16) {
+        float x = xmin + half + step * (float) i;
+        for (size_t k = 0; k < 16; k ++) {
+          xp->x[k] = x + step * (float) k;
+        }
+        rasterize(
+            code,
+            xp,
+            rp,
+            tile + j * stride + i,
+            stride
+          );
+      }
+    }
+
+    free(rp);
+  } else {
+    for (size_t j = 0; j < 4; j ++) {
+      for (size_t i = 0; i < 4; i ++) {
+        render_tile(
+            num_insts,
+            code,
+            xmin + 0.25f * side * (float) i,
+            ymax - 0.25f * side * (float) j,
+            0.25f * side,
+            resolution / 4,
+            stride,
+            tile + resolution / 4 * stride * j + resolution / 4 * i
+          );
+      }
+    }
+  }
+}
+
+void render(
+    size_t num_insts,
+    Inst code[num_insts],
+    size_t resolution,
+    uint8_t image[resolution][resolution]
+  )
+{
+  // resolution = 256, 1024, 4096, ...
+  assert(resolution >= 256);
+  assert(0 == (resolution & (resolution - 1)));
+  assert(__builtin_ctzll(resolution) % 2 == 0);
+
   float side = 2.0f;
-  float step = side / RES;
   float xmin = -1.0f;
   float ymax = 1.0f;
-  uint8_t * p0 = &image[0][0];
 
 #pragma omp parallel for
-  for (size_t t1 = 0; t1 < 16; t1 ++) {
-    size_t i1 = t1 & 3;
-    size_t j1 = t1 >> 2;
-    float xmin1 = xmin + side / 4.0f * (float) i1;
-    float ymax1 = ymax - side / 4.0f * (float) j1;
-    uint8_t * p1 = p0 + RES / 4 * i1 + RES / 4 * RES * j1;
-
-    // TODO: specialize here
-    {
-      sp_X * xp = &(sp_X) {};
-      sp_R * rp = malloc(sizeof(sp_R) * num_insts);
-      if (! rp) abort();
-
-      for (size_t k = 0; k < 5; k ++) {
-        xp->x[k] = xmin1 + side / 16.0f * (float) k;
-        xp->y[k] = ymax1 - side / 16.0f * (float) k;
-      }
-
-      specialize(code, xp, rp);
-    }
-
-    {
-      ra_X * xp = &(ra_X) {};
-      ra_R * rp = malloc(sizeof(ra_R) * num_insts);
-      if (! rp) abort();
-
-      for (size_t j2 = 0; j2 < 4; j2 ++)
-      for (size_t i2 = 0; i2 < 4; i2 ++) {
-        float xmin2 = xmin1 + side / 16.0f * (float) i2;
-        float ymax2 = ymax1 - side / 16.0f * (float) j2;
-        uint8_t * p2 = p1 + RES / 16 * i2 + RES / 16 * RES * j2;
-        for (size_t j3 = 0; j3 < 4; j3 ++)
-        for (size_t i3 = 0; i3 < 4; i3 ++) {
-          float xmin3 = xmin2 + side / 64.0f * (float) i3;
-          float ymax3 = ymax2 - side / 64.0f * (float) j3;
-          uint8_t * p3 = p2 + RES / 64 * i3 + RES / 64 * RES * j3;
-          for (size_t k = 0; k < 16; k ++) {
-            xp->x[k] = xmin3 + step / 2.0f + step * (float) k;
-          }
-          for (size_t t4 = 0; t4 < 4; t4 ++) {
-            float ymax4 = ymax3 - side / 256.0f * (float) t4;
-            uint8_t * p4 = p3 + RES / 256 * RES * t4;
-            for (size_t k = 0; k < 4; k ++) {
-              xp->y[k] = ymax4 - step / 2.0f - step * (float) k;
-            }
-            size_t result = rasterize(code, xp, rp);
-            for (size_t k = 0; k < 4; k ++) {
-              uint8_t * p5 = p4 + RES * k;
-              memcpy(p5, &rp[result].u8x64[16 * k], 16);
-            }
-          }
-        }
-      }
-      free(rp);
-    }
+  for (size_t t = 0; t < 16; t ++) {
+    size_t i = t % 4;
+    size_t j = t / 4;
+    render_tile(
+        num_insts,
+        code,
+        xmin + 0.25f * side * (float) i,
+        ymax - 0.25f * side * (float) j,
+        0.25f * side,
+        resolution / 4,
+        resolution,
+        &image[0][0] + resolution / 4 * resolution * j + resolution / 4 * i
+      );
   }
 }
