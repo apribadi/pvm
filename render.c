@@ -212,44 +212,37 @@ void render_tile(
     ra_R * rp = malloc(sizeof(ra_R) * num_insts);
     if (! rp) abort();
 
-    float step = side / (float) resolution;
-    float half = 0.5f * step;
+    float step = 0.015625f * side;
 
-    for (size_t j = 0; j < 64; j += 4) {
-      float y = ymax - half - step * (float) j;
+    for (size_t i = 0; i < 64; i += 4) {
       for (size_t k = 0; k < 4; k ++) {
-        xp->y[k] = y - step * (float) k;
+        xp->y[k] = ymax - 0.5f * step - step * (float) (i + k);
       }
-      for (size_t i = 0; i < 64; i += 16) {
-        float x = xmin + half + step * (float) i;
+      for (size_t j = 0; j < 64; j += 16) {
         for (size_t k = 0; k < 16; k ++) {
-          xp->x[k] = x + step * (float) k;
+          xp->x[k] = xmin + 0.5f * step + step * (float) (j + k);
         }
-        rasterize(
-            code,
-            xp,
-            rp,
-            tile + j * stride + i,
-            stride
-          );
+        rasterize(code, xp, rp, tile + i * stride + j, stride);
       }
     }
 
     free(rp);
-  } else {
+
+    return;
+  }
+
+  for (size_t i = 0; i < 4; i ++) {
     for (size_t j = 0; j < 4; j ++) {
-      for (size_t i = 0; i < 4; i ++) {
-        render_tile(
-            num_insts,
-            code,
-            xmin + 0.25f * side * (float) i,
-            ymax - 0.25f * side * (float) j,
-            0.25f * side,
-            resolution / 4,
-            stride,
-            tile + resolution / 4 * stride * j + resolution / 4 * i
-          );
-      }
+      render_tile(
+          num_insts,
+          code,
+          xmin + 0.25f * side * (float) j,
+          ymax - 0.25f * side * (float) i,
+          0.25f * side,
+          resolution / 4,
+          stride,
+          tile + resolution / 4 * stride * i + resolution / 4 * j
+        );
     }
   }
 }
@@ -263,7 +256,7 @@ void render(
 {
   // resolution = 256, 1024, 4096, ...
   assert(resolution >= 256);
-  assert(0 == (resolution & (resolution - 1)));
+  assert(__builtin_popcountll(resolution) == 1);
   assert(__builtin_ctzll(resolution) % 2 == 0);
 
   float side = 2.0f;
@@ -272,17 +265,17 @@ void render(
 
 #pragma omp parallel for
   for (size_t t = 0; t < 16; t ++) {
-    size_t i = t % 4;
-    size_t j = t / 4;
+    size_t i = t / 4;
+    size_t j = t % 4;
     render_tile(
         num_insts,
         code,
-        xmin + 0.25f * side * (float) i,
-        ymax - 0.25f * side * (float) j,
+        xmin + 0.25f * side * (float) j,
+        ymax - 0.25f * side * (float) i,
         0.25f * side,
         resolution / 4,
         resolution,
-        &image[0][0] + resolution / 4 * resolution * j + resolution / 4 * i
+        &image[resolution / 4 * i][resolution / 4 * j]
       );
   }
 }
